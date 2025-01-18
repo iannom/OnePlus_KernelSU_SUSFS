@@ -1,4 +1,4 @@
-name: Build and Release GKI Kernels
+name: Build and Release OnePlus Kernels
 
 permissions:
   contents: write  # Allow writing to repository contents (for pushing tags)
@@ -10,18 +10,8 @@ on:
   #    - main  # Trigger on push to the main branch
   workflow_dispatch:
     inputs:
-      build_a12:
-        description: 'Build Android 12 kernel?'
-        required: true
-        type: boolean
-        default: true
-      build_a13:
-        description: 'Build Android 13 kernel?'
-        required: true
-        type: boolean
-        default: true
-      build_a14:
-        description: 'Build Android 14 kernel?'
+      build_op12:
+        description: 'Build OP12 kernel?'
         required: true
         type: boolean
         default: true
@@ -32,46 +22,21 @@ on:
         default: false
 
 jobs:
-  build-kernel-a12-5-10:
-    uses: ./.github/workflows/build-kernel-a12-5.10.yml
+  build-kernel-op12:
+    uses: ./.github/workflows/build-kernel-op12.yml
     secrets: inherit
-    if: ${{ github.event.inputs.build_a12 == 'true' || github.event.inputs.build_a12 == '' }}
-
-  build-kernel-a13-5-10:
-    uses: ./.github/workflows/build-kernel-a13-5.10.yml
-    secrets: inherit
-    if: ${{ github.event.inputs.build_a13 == 'true' || github.event.inputs.build_a13 == '' }}
-
-  build-kernel-a13-5-15:
-    uses: ./.github/workflows/build-kernel-a13-5.15.yml
-    secrets: inherit
-    if: ${{ github.event.inputs.build_a13 == 'true' || github.event.inputs.build_a13 == '' }}
-
-  build-kernel-a14-5-15:
-    uses: ./.github/workflows/build-kernel-a14-5.15.yml
-    secrets: inherit
-    if: ${{ github.event.inputs.build_a14 == 'true' || github.event.inputs.build_a14 == '' }}
-
-  build-kernel-a14-6-1:
-    uses: ./.github/workflows/build-kernel-a14-6.1.yml
-    secrets: inherit
-    if: ${{ github.event.inputs.build_a14 == 'true' || github.event.inputs.build_a14 == '' }}
+    if: ${{ github.event.inputs.build_op12 == 'true' || github.event.inputs.op12 == '' }}
 
   trigger-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 2160  # Set maximum timeout
     needs:
-        - build-kernel-a12-5-10
-        - build-kernel-a13-5-10
-        - build-kernel-a13-5-15
-        - build-kernel-a14-5-15
-        - build-kernel-a14-6-1
+        - build-kernel-op12
     if: ${{ github.event.inputs.make_release == 'true' }}
     env:
       REPO_OWNER: TheWildJames
-      REPO_NAME: GKI_KernelSU_SUSFS
+      REPO_NAME: OnePlus_KernelSU_SUSFS
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: "*TEST BUILD* GKI Kernels With KernelSU Next & SUSFS v1.5.3 *TEST BUILD*"
+      RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.3 *TEST BUILD*"
       RELEASE_NOTES: |
         This release contains KernelSU Next and SUSFS v1.5.3
         
@@ -133,7 +98,6 @@ jobs:
             git tag $NEW_TAG
             git push origin $NEW_TAG
 
-      # Download Artifacts for A12 (Only if A12 Build is successful or input is true or empty)
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
