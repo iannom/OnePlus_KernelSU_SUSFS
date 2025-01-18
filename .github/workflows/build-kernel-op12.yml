@@ -20,12 +20,12 @@ jobs:
 
       - name: Increase Swap Space to 16 GB
         run: |
-          fallocate -l 16G /swapfile
-          hmod 600 /swapfile
-          mkswap /swapfile
-          swapon /swapfile
-          swapon --show
-
+          sudo fallocate -l 16G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+          free -h
 
       - name: Set CONFIG Environment Variable
         run: |
