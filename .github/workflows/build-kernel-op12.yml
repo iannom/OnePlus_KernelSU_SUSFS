@@ -1,4 +1,4 @@
-name: Build Android 14 6.1 GKI Kernels
+name: Build OnePlus Android 14 6.1 Kernel
 
 on:
   workflow_call:  # This allows this workflow to be called from another workflow
