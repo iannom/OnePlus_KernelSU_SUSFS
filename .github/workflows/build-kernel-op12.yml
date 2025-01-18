@@ -18,6 +18,15 @@ jobs:
           remove-haskell: 'true'
           remove-codeql: 'true'
 
+      - name: Increase Swap Space to 16 GB
+        run: |
+          fallocate -l 16G /swapfile
+          hmod 600 /swapfile
+          mkswap /swapfile
+          swapon /swapfile
+          swapon --show
+
+
       - name: Set CONFIG Environment Variable
         run: |
           # Set CONFIG dynamically based on matrix values
