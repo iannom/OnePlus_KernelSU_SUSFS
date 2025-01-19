@@ -1,4 +1,4 @@
-name: Build OnePlus Android 14 6.1 Kernel
+name: Build OnePlus 11 Android 13 5.15 Kernel
 
 on:
   workflow_call:  # This allows this workflow to be called from another workflow
