@@ -103,7 +103,6 @@ jobs:
 
       # Create GitHub Release and upload files if make_release is true
       - name: Create GitHub Release
-        if: ${{ github.event.inputs.make_release == 'true' }}  # Only run if make_release is true and all build jobs succeeded
         uses: actions/create-release@v1
         with:
           tag_name: ${{ env.NEW_TAG }}  # Use the generated tag for the release
