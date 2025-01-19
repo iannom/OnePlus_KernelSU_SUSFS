@@ -32,15 +32,15 @@ jobs:
   build-kernel-op11:
     uses: ./.github/workflows/build-kernel-op11.yml
     secrets: inherit
-    if: ${{ inputs.build_op11 || inputs.build.op11 == '' }}
+    if: ${{ github.event.inputs.build_op11 || github.event.inputs.build.op11 == '' }}
   build-kernel-op12:
     uses: ./.github/workflows/build-kernel-op12.yml
     secrets: inherit
-    if: ${{ inputs.build_op12 || inputs.build.op12 == '' }}
+    if: ${{ github.event.inputs.build_op12 || github.event.inputs.build.op12 == '' }}
   build-kernel-opopen:
     uses: ./.github/workflows/build-kernel-opopen.yml
     secrets: inherit
-    if: ${{ inputs.build_opopen || inputs.build.opopen == '' }}
+    if: ${{ github.event.inputs.build_opopen || github.event.inputs.build.opopen == '' }}
 
   trigger-release:
     runs-on: ubuntu-latest
