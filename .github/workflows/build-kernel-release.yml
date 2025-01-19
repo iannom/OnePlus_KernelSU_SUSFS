@@ -23,13 +23,13 @@ jobs:
   build-kernel-op12:
     uses: ./.github/workflows/build-kernel-op12.yml
     secrets: inherit
-    if: ${{ github.event.inputs.build_op12 == 'true' || github.event.inputs.op12 == '' }}
+    if: ${{ inputs.build_op12 || inputs.build.op12 == '' }}
 
   trigger-release:
     runs-on: ubuntu-latest
     needs:
         - build-kernel-op12
-    if: ${{ github.event.inputs.make_release == 'true' }}
+    if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: TheWildJames
       REPO_NAME: OnePlus_KernelSU_SUSFS
