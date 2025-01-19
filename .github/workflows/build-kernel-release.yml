@@ -36,6 +36,7 @@ jobs:
   trigger-release:
     runs-on: ubuntu-latest
     needs:
+        - build-kernel-op11
         - build-kernel-op12
     if: ${{ inputs.make_release }}
     env:
