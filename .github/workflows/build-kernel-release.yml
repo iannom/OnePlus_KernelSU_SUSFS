@@ -7,6 +7,11 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      build_op11:
+        description: 'Build OP11 kernel?'
+        required: true
+        type: boolean
+        default: true
       build_op12:
         description: 'Build OP12 kernel?'
         required: true
@@ -19,6 +24,10 @@ on:
         default: false
 
 jobs:
+  build-kernel-op11:
+    uses: ./.github/workflows/build-kernel-op11.yml
+    secrets: inherit
+    if: ${{ inputs.build_op11 || inputs.build.op11 == '' }}
   build-kernel-op12:
     uses: ./.github/workflows/build-kernel-op12.yml
     secrets: inherit
