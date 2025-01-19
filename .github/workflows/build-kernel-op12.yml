@@ -18,9 +18,9 @@ jobs:
           remove-haskell: 'true'
           remove-codeql: 'true'
 
-      - name: Increase Swap Space to 16 GB
+      - name: Increase Swap Space to 8 GB
         run: |
-          sudo fallocate -l 16G /swapfile
+          sudo fallocate -l 8G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
