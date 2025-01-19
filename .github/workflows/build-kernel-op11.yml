@@ -171,8 +171,7 @@ jobs:
           
           echo "Building the kernel..."
           rm -rf ./kernel_platform/common/android/abi_gki_protected_exports_*
-          ./kernel_platform/oplus/build/oplus_build_kernel.sh pineapple gki thin all none
-          ./kernel_platform/oplus/build/oplus_build_kernel.sh kalama gki thin  none
+          ./kernel_platform/oplus/build/oplus_build_kernel.sh kalama gki thin all disable
 
       - name: Create Bootimgs Folder and Copy Images
         run: |
