@@ -4,7 +4,7 @@ on:
   workflow_call:  # This allows this workflow to be called from another workflow
   
 jobs:
-  build-kernel-a14-6-1-kernelsu-susfs:
+  build-kernel-a13-5-15-kernelsu-susfs:
     runs-on: ubuntu-22.04
 
     steps:
