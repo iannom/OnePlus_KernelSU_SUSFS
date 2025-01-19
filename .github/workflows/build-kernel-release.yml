@@ -8,12 +8,17 @@ on:
   workflow_dispatch:
     inputs:
       build_op11:
-        description: 'Build OP11 kernel?'
+        description: 'Build OP 11 kernel?'
         required: true
         type: boolean
         default: true
       build_op12:
-        description: 'Build OP12 kernel?'
+        description: 'Build OP 12 kernel?'
+        required: true
+        type: boolean
+        default: true
+      build_opopen:
+        description: 'Build OP Open kernel?'
         required: true
         type: boolean
         default: true
@@ -32,12 +37,17 @@ jobs:
     uses: ./.github/workflows/build-kernel-op12.yml
     secrets: inherit
     if: ${{ inputs.build_op12 || inputs.build.op12 == '' }}
+  build-kernel-opopen:
+    uses: ./.github/workflows/build-kernel-opopen.yml
+    secrets: inherit
+    if: ${{ inputs.build_opopen || inputs.build.opopen == '' }}
 
   trigger-release:
     runs-on: ubuntu-latest
     needs:
         - build-kernel-op11
         - build-kernel-op12
+        - build-kernel-opopen
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: TheWildJames
