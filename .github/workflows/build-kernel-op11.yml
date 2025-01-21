@@ -11,8 +11,8 @@ jobs:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
         with:
-          root-reserve-mb: 16384    # 16GB for root memory reservation
-          temp-reserve-mb: 8192     # 8GB for temporary memory reservation
+          root-reserve-mb: 8192    # 16GB for root memory reservation
+          temp-reserve-mb: 2048     # 8GB for temporary memory reservation
           swap-size-mb: 16384       # 16GB for swap size
           remove-dotnet: 'true'
           remove-android: 'true'
