@@ -19,6 +19,9 @@ jobs:
           remove-haskell: 'true'
           remove-codeql: 'true'
 
+      - name: Get build space
+        run: |
+          free -h
 
       - name: Set CONFIG Environment Variable
         run: |
