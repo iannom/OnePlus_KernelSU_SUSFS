@@ -12,18 +12,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # - name: Maximize build space
-      #   uses: easimon/maximize-build-space@master
-      #   with:
-      #     root-reserve-mb: 16384 # 16 GB
-      #     temp-reserve-mb: 4096  # 4 GB
-      #     swap-size-mb: 16384    # 16 GB
-      #     remove-dotnet: 'true'
-      #     remove-android: 'true'
-      #     remove-haskell: 'true'
-      #     remove-codeql: 'true'
-
-
       - name: Cleanup workspace
         run: |
           rm -rf $GITHUB_WORKSPACE/*
