@@ -1,20 +1,35 @@
 name: Build OnePlus Ace 3V Android 14 6.1 Kernel
 
-#OG from Krant274/OnePlus_KernelSU_SUSFS
-
-
 on:
-  workflow_call:
+  workflow_call:  # This allows this workflow to be called from another workflow
   workflow_dispatch:
   
 jobs:
   build-kernel-a14-6-1-kernelsu-susfs:
     runs-on: ubuntu-latest
+
     steps:
+      # - name: Maximize build space
+      #   uses: easimon/maximize-build-space@master
+      #   with:
+      #     root-reserve-mb: 16384 # 16 GB
+      #     temp-reserve-mb: 4096  # 4 GB
+      #     swap-size-mb: 16384    # 16 GB
+      #     remove-dotnet: 'true'
+      #     remove-android: 'true'
+      #     remove-haskell: 'true'
+      #     remove-codeql: 'true'
+
       - name: Cleanup workspace
         run: |
           rm -rf $GITHUB_WORKSPACE/*
 
+      - name: Get build space
+        run: |
+          free -h
+          df -h
+
+          
       - name: Set CONFIG Environment Variable
         run: |
           # Set CONFIG dynamically based on matrix values
@@ -199,7 +214,6 @@ jobs:
           path: |
             *.zip
 
-            
-       - name: Cleanup workspace
+      - name: Cleanup workspace
         run: |
           rm -rf $GITHUB_WORKSPACE/*
