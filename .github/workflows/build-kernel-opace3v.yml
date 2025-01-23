@@ -23,7 +23,6 @@ jobs:
       #     remove-haskell: 'true'
       #     remove-codeql: 'true'
 
-
        - name: Cleanup workspace
         run: |
           rm -rf $GITHUB_WORKSPACE/*
