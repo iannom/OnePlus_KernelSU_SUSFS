@@ -5,23 +5,19 @@ on:
   
 jobs:
   build-kernel-a13-5-15-kernelsu-susfs:
-    runs-on: ubuntu-local
+    runs-on: ubuntu-latest
 
     steps:
-    #  - name: Maximize build space
-    #    uses: easimon/maximize-build-space@master
-    #    with:
-    #      root-reserve-mb: 8192    # 16GB for root memory reservation
-    #      temp-reserve-mb: 2048     # 8GB for temporary memory reservation
-    #      swap-size-mb: 16384       # 16GB for swap size
-    #      remove-dotnet: 'true'
-    #      remove-android: 'true'
-    #      remove-haskell: 'true'
-    #      remove-codeql: 'true'
-
-      - name: Cleanup workspace
-        run: |
-          rm -rf $GITHUB_WORKSPACE/*
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192    # 16GB for root memory reservation
+          temp-reserve-mb: 2048     # 8GB for temporary memory reservation
+          swap-size-mb: 8192       # 16GB for swap size
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
 
       - name: Get build space
         run: |
@@ -171,6 +167,9 @@ jobs:
           sed -i '$s|echo "\$res"|echo "\$res-Wild+"|' ./common/scripts/setlocalversion
           sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
           sed -i 's/-dirty//' ./common/scripts/setlocalversion
+
+          sed -i 's/local default_value=none/local default_value=thin/' ./opus/build/opus_setup.sh
+          sed -i 's/local default_value=enable/local default_value=disable/' ./opus/build/opus_setup.sh
           
           # Run perl command to modify UTS_VERSION
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
