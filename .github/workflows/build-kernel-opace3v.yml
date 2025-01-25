@@ -208,7 +208,3 @@ jobs:
           name: kernel-${{ env.CONFIG }}
           path: |
             *.zip
-
-      - name: Cleanup workspace
-        run: |
-          rm -rf $GITHUB_WORKSPACE/*
