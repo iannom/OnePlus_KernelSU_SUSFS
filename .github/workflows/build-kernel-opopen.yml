@@ -13,7 +13,7 @@ jobs:
         with:
           root-reserve-mb: 8192     # 8GB for root memory reservation
           temp-reserve-mb: 2048    # 2GB for temporary memory reservation
-          swap-size-mb: 16384      # 32GB for swap size
+          swap-size-mb: 8192      # 32GB for swap size
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
