@@ -129,7 +129,7 @@ jobs:
           cd "$CONFIG/kernel_platform/common"
           # Apply additional patch
           cp ../../../kernel_patches/69_hide_stuff.patch ./
-          patch -p1 -F 3 < 69_hide_stuff.patch || true
+          patch -p1 -F 3 < 69_hide_stuff.patch
 
       - name: Add SUSFS Configuration Settings
         run: |
@@ -187,26 +187,7 @@ jobs:
           
           echo "Building the kernel..."
           rm -rf ./kernel_platform/common/android/abi_gki_protected_exports_*
-          ./kernel_platform/oplus/build/oplus_build_kernel.sh kalama gki &
-
-          # Save the PID of the background process
-          BUILD_PID=$!
-
-          # Loop and monitor memory and disk usage every 10 seconds until the build finishes
-          while kill -0 $BUILD_PID 2>/dev/null; do
-            echo "==== Memory Usage ===="
-            free -h
-            echo
-            echo "==== Disk Usage ===="
-            df -h
-            echo
-            sleep 10  # Wait for 10 seconds
-          done
-
-      - name: Get build space
-        run: |
-          free -h
-          df -h
+          ./kernel_platform/oplus/build/oplus_build_kernel.sh kalama gki
 
       - name: Create Bootimgs Folder and Copy Images
         run: |
