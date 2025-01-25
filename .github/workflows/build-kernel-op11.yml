@@ -181,14 +181,27 @@ jobs:
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
 
       - name: Build the Kernel
-        continue-on-error: true
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
           
           echo "Building the kernel..."
           rm -rf ./kernel_platform/common/android/abi_gki_protected_exports_*
-          ./kernel_platform/oplus/build/oplus_build_kernel.sh kalama gki
+          ./kernel_platform/oplus/build/oplus_build_kernel.sh kalama gki &
+
+          # Save the PID of the background process
+          BUILD_PID=$!
+
+          # Loop and monitor memory and disk usage every 10 seconds until the build finishes
+          while kill -0 $BUILD_PID 2>/dev/null; do
+            echo "==== Memory Usage ===="
+            free -h
+            echo
+            echo "==== Disk Usage ===="
+            df -h
+            echo
+            sleep 10  # Wait for 10 seconds
+          done
 
       - name: Get build space
         run: |
