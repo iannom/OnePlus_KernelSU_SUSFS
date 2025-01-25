@@ -5,23 +5,19 @@ on:
   
 jobs:
   build-kernel-a13-5-15-kernelsu-susfs:
-    runs-on: ubuntu-local
+    runs-on: ubuntu-latest
 
     steps:
-    #  - name: Maximize build space
-    #    uses: easimon/maximize-build-space@master
-    #    with:
-    #      root-reserve-mb: 8192     # 8GB for root memory reservation
-    #      temp-reserve-mb: 2048    # 2GB for temporary memory reservation
-    #      swap-size-mb: 32768      # 32GB for swap size
-    #      remove-dotnet: 'true'
-    #      remove-android: 'true'
-    #      remove-haskell: 'true'
-    #      remove-codeql: 'true'
-
-      - name: Cleanup workspace
-        run: |
-          rm -rf $GITHUB_WORKSPACE/*
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192     # 8GB for root memory reservation
+          temp-reserve-mb: 2048    # 2GB for temporary memory reservation
+          swap-size-mb: 16384      # 32GB for swap size
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
 
       - name: Set CONFIG Environment Variable
         run: |
@@ -166,6 +162,10 @@ jobs:
           sed -i '$s|echo "\$res"|echo "\$res-Wild+"|' ./common/scripts/setlocalversion
           sed -i "/stable_scmversion_cmd/s/-maybe-dirty//g" ./build/kernel/kleaf/impl/stamp.bzl
           sed -i 's/-dirty//' ./common/scripts/setlocalversion
+
+          sed -i '/echo "LTO $LTO "/i export LTO=thin' ./oplus/build/oplus_setup.sh
+          sed -i 's/export RECOMPILE_KERNEL="1"/export RECOMPILE_KERNEL="0"/g' ./oplus/build/oplus_setup.sh
+          sed -i 's/export REPACK_IMG=true/export REPACK_IMG=false/g' ./oplus/build/oplus_setup.sh
           
           # Run perl command to modify UTS_VERSION
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
@@ -202,7 +202,3 @@ jobs:
           name: kernel-${{ env.CONFIG }}
           path: |
             *.zip
-
-      - name: Cleanup workspace
-        run: |
-          rm -rf $GITHUB_WORKSPACE/*
