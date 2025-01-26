@@ -22,7 +22,7 @@ jobs:
       - name: Set CONFIG Environment Variable
         run: |
           # Set CONFIG dynamically based on matrix values
-          CONFIG="opace3p"
+          CONFIG="opace3pro"
           
           # Set CONFIG as an environment variable for future steps
           echo "CONFIG=$CONFIG" >> $GITHUB_ENV
@@ -62,7 +62,7 @@ jobs:
           
           # Initialize and sync kernel source
           echo "Initializing and syncing kernel source..."
-          $REPO init -u https://github.com/OnePlusOSS/kernel_manifest.git -b oneplus/sm8650 -m oneplus_ace3_pro.xml --repo-rev=v2.16
+          $REPO init -u https://github.com/OnePlusOSS/kernel_manifest.git -b oneplus/sm8650 -m oneplus_ace3_pro.xml --depth=1 --repo-rev=v2.16
           
           # Sync repo and apply patches
           $REPO --version
