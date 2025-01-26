@@ -11,9 +11,9 @@ jobs:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
         with:
-          root-reserve-mb: 16384 # 16 GB
-          temp-reserve-mb: 4096  # 4 GB
-          swap-size-mb: 16384    # 16 GB
+          root-reserve-mb: 8192
+          temp-reserve-mb: 4096
+          swap-size-mb: 8192
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
@@ -166,6 +166,12 @@ jobs:
           # Run perl command to modify UTS_VERSION
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
 
+      - name: Upload oplus_setup.sh as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: oplus_setup_file  # Name of the artifact
+          path: ./$CONFIG/kernel_platform/oplus/build/oplus_setup.sh  # Path to the file
+      
       - name: Build the Kernel
         run: |
           echo "Changing to configuration directory: $CONFIG..."
