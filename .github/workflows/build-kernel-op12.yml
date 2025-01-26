@@ -5,7 +5,7 @@ on:
   
 jobs:
   build-kernel-a14-6-1-kernelsu-susfs:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Maximize build space
@@ -171,12 +171,6 @@ jobs:
           # Run perl command to modify UTS_VERSION
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
 
-      - name: Upload oplus_setup.sh as artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: oplus_setup_file  # Name of the artifact
-          path: ./${{ env.CONFIG }}/kernel_platform/oplus/build/oplus_setup.sh  # Path to the file
-      
       - name: Build the Kernel
         run: |
           echo "Changing to configuration directory: $CONFIG..."
