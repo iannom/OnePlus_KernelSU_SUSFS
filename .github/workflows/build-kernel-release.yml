@@ -27,6 +27,11 @@ on:
         required: true
         type: boolean
         default: true
+      build_opace3pro:
+        description: 'Build OP Ace 3 Pro kernel?'
+        required: true
+        type: boolean
+        default: true
       build_opnord4:
         description: 'Build OP Nord 4 kernel?'
         required: true
@@ -55,6 +60,10 @@ jobs:
     uses: ./.github/workflows/build-kernel-opace3v.yml
     secrets: inherit
     if: ${{ inputs.build_opace3v }}
+  build-kernel-opace3pro:
+    uses: ./.github/workflows/build-kernel-opace3pro.yml
+    secrets: inherit
+    if: ${{ inputs.build_opace3v }}
   build-kernel-opnord4:
     uses: ./.github/workflows/build-kernel-opnord4.yml
     secrets: inherit
@@ -67,6 +76,7 @@ jobs:
         - build-kernel-op12
         - build-kernel-opopen
         - build-kernel-opace3v
+        - build-kernel-opace3pro
         - build-kernel-opnord4
     if: ${{ inputs.make_release }}
     env:
