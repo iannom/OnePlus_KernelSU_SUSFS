@@ -49,6 +49,7 @@ jobs:
   build-kernel-opace3v:
     uses: ./.github/workflows/build-kernel-opace3v.yml
     secrets: inherit
+    if: ${{ inputs.build_opace3v }
 
   trigger-release:
     runs-on: ubuntu-latest
