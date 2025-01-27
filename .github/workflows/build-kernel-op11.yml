@@ -8,27 +8,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get build space
-        run: |
-          free -h
-          df -h
-    
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
         with:
           root-reserve-mb: 8192    # 16GB for root memory reservation
           temp-reserve-mb: 2048     # 8GB for temporary memory reservation
-          swap-size-mb: 16384       # 16GB for swap size
+          swap-size-mb: 8192       # 16GB for swap size
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
-
-      - name: Get build space
-        run: |
-          free -h
-          df -h
-
+          
       - name: Set CONFIG Environment Variable
         run: |
           # Set CONFIG dynamically based on matrix values
