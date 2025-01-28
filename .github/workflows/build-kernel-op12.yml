@@ -67,14 +67,7 @@ jobs:
           # Sync repo and apply patches
           $REPO --version
           $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
-
-      - name: Cache $Config folder
-        uses: actions/cache@v3
-        with:
-          path: ${{ env.CONFIG }} # Folder to cache
-          key: config-cache-key-${{ hashFiles('**/$Config/**/*') }}  # Cache key based on files in $Config
-          #key: ${{ env.CONFIG }} # A static key (won't change unless you want to)
-
+          
       - name: Add KernelSU
         run: |
           echo "Changing to configuration directory: $CONFIG..."
