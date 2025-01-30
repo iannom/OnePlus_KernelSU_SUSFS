@@ -171,6 +171,7 @@ jobs:
           #sed -i 's/^#\(choose_target_build \$4\)/\1/' ./oplus/build/oplus_setup.sh
           #sed -i 's/^#\(choose_repack_img \$5\)/\1/' ./oplus/build/oplus_setup.sh
 
+          sed -i 's|^source kernel_platform/oplus/build/oplus_setup.sh \$1 \$2|source kernel_platform/oplus/build/oplus_setup.sh \$1 \$2 \$3 \$4 \$5|' ./oplus/build/oplus_build_kernel.sh
          
           # Run perl command to modify UTS_VERSION
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
@@ -186,15 +187,7 @@ jobs:
           #git config --global user.name "TheWildJames"
           #git add *
           #git commit -s -a -m "getting rid of -dirty"
-          ./kernel_platform/oplus/build/oplus_build_kernel.sh pineapple gki &
-          CMD_PID=$!
-          while kill -0 $CMD_PID 2>/dev/null; do
-              echo "Memory Usage:"
-              free -h
-              echo "Disk Usage:"
-              df -h
-              sleep 10
-          done
+          ./kernel_platform/oplus/build/oplus_build_kernel.sh pineapple gki thin all none
    
       - name: Create Bootimgs Folder and Copy Images
         run: |
