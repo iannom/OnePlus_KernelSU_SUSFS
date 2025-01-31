@@ -157,6 +157,7 @@ jobs:
          echo "CONFIG_LTO=y" >> ./common/arch/arm64/configs/gki_defconfig
          echo "CONFIG_LTO_CLANG_THIN=y" >> ./common/arch/arm64/configs/gki_defconfig
 
+
       - name: Run sed and perl Commands
         run: |
           echo "Changing to configuration directory: $CONFIG..."
