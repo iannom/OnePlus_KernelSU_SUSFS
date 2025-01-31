@@ -12,28 +12,13 @@ on:
         required: true
         type: boolean
         default: true
+      build_op11r:
+        description: 'Build OP 11r kernel?'
+        required: true
+        type: boolean
+        default: true
       build_op12:
         description: 'Build OP 12 kernel?'
-        required: true
-        type: boolean
-        default: true
-      build_opopen:
-        description: 'Build OP Open kernel?'
-        required: true
-        type: boolean
-        default: true
-      build_opace3v:
-        description: 'Build OP Ace 3V kernel?'
-        required: true
-        type: boolean
-        default: true
-      build_opace3pro:
-        description: 'Build OP Ace 3 Pro kernel?'
-        required: true
-        type: boolean
-        default: true
-      build_opnord4:
-        description: 'Build OP Nord 4 kernel?'
         required: true
         type: boolean
         default: true
@@ -48,44 +33,29 @@ jobs:
     uses: ./.github/workflows/build-kernel-op11.yml
     secrets: inherit
     if: ${{ inputs.build_op11 }}
+  build-kernel-op11r:
+    uses: ./.github/workflows/build-kernel-op11r.yml
+    secrets: inherit
+    if: ${{ inputs.build_op11r }}
   build-kernel-op12:
     uses: ./.github/workflows/build-kernel-op12.yml
     secrets: inherit
     if: ${{ inputs.build_op12 }}
-  build-kernel-opopen:
-    uses: ./.github/workflows/build-kernel-opopen.yml
-    secrets: inherit
-    if: ${{ inputs.build_opopen }}
-  build-kernel-opace3v:
-    uses: ./.github/workflows/build-kernel-opace3v.yml
-    secrets: inherit
-    if: ${{ inputs.build_opace3v }}
-  build-kernel-opace3pro:
-    uses: ./.github/workflows/build-kernel-opace3pro.yml
-    secrets: inherit
-    if: ${{ inputs.build_opace3v }}
-  build-kernel-opnord4:
-    uses: ./.github/workflows/build-kernel-opnord4.yml
-    secrets: inherit
-    if: ${{ inputs.build_opnord4 }}
 
   trigger-release:
     runs-on: ubuntu-latest
     needs:
         - build-kernel-op11
+        - build-kernel-op11r
         - build-kernel-op12
-        - build-kernel-opopen
-       # - build-kernel-opace3v
-       # - build-kernel-opace3pro
-       # - build-kernel-opnord4
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: TheWildJames
       REPO_NAME: OnePlus_KernelSU_SUSFS
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.3 *TEST BUILD*"
+      RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.4 *TEST BUILD*"
       RELEASE_NOTES: |
-        This release contains KernelSU Next and SUSFS v1.5.3
+        This release contains KernelSU Next and SUSFS v1.5.4
         
         Module: 
         -> https://github.com/sidex15/ksu_module_susfs
@@ -103,7 +73,7 @@ jobs:
         
         Features:
         [+] KernelSU-Next
-        [+] SUSFS v1.5.3
+        [+] SUSFS v1.5.4
         [+] Wireguard Support
         [+] Maphide LineageOS Detections
         [+] Futile Maphide for jit-zygote-cache Detections
