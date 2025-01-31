@@ -32,8 +32,8 @@ jobs:
       - name: Install Repo
         run: |
           # Install dependencies
-          apt update
-          apt install repo
+          sudo apt update
+          sudo apt install repo
 
       - name: Clone AnyKernel3 and Other Dependencies
         run: |
