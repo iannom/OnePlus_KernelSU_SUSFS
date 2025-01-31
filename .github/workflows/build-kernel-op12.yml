@@ -8,8 +8,16 @@ jobs:
     runs-on: ubuntu-22.04-local
 
     steps:
-      - name: Clear workspace
-        run: rm -rf ${{ github.workspace }}/*
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192    # 16GB for root memory reservation
+          temp-reserve-mb: 2048     # 8GB for temporary memory reservation
+          swap-size-mb: 8192       # 16GB for swap size
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
       
       - name: Set CONFIG Environment Variable
         run: |
@@ -20,6 +28,12 @@ jobs:
           echo "CONFIG=$CONFIG" >> $GITHUB_ENV
           
           echo "CONFIG set to: $CONFIG"
+
+      - name: Install Repo
+        run: |
+          # Install dependencies
+          sudo apt update
+          sudo apt install repo python3 python-is-python3
 
       - name: Clone AnyKernel3 and Other Dependencies
         run: |
@@ -133,6 +147,13 @@ jobs:
           
           # Add additional tmpfs config setting
           echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+      - name: Set LTO to THIN
+        run: |
+         cd kernel_workspace/kernel_platform
+         sed -i 's/CONFIG_LTO=n/CONFIG_LTO=y/' "./common/arch/arm64/configs/gki_defconfig"
+         sed -i 's/CONFIG_LTO_CLANG_FULL=y/CONFIG_LTO_CLANG_THIN=y/' "./common/arch/arm64/configs/gki_defconfig"
+         sed -i 's/CONFIG_LTO_CLANG_NONE=y/CONFIG_LTO_CLANG_THIN=y/' "./common/arch/arm64/configs/gki_defconfig"
 
       - name: Run sed and perl Commands
         run: |
