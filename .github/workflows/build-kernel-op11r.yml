@@ -22,7 +22,7 @@ jobs:
       - name: Set CONFIG Environment Variable
         run: |
           # Set CONFIG dynamically based on matrix values
-          CONFIG="op11"
+          CONFIG="op11r"
           
           # Set CONFIG as an environment variable for future steps
           echo "CONFIG=$CONFIG" >> $GITHUB_ENV
@@ -32,10 +32,8 @@ jobs:
       - name: Install Repo
         run: |
           # Install dependencies
-          mkdir -p ./git-repo
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ./git-repo/repo
-          chmod a+rx ./git-repo/repo
-          echo "REPO=$GITHUB_WORKSPACE/./git-repo/repo" >> $GITHUB_ENV
+          sudo apt update
+          sudo apt install repo python3 python-is-python3
 
       - name: Clone AnyKernel3 and Other Dependencies
         run: |
@@ -50,9 +48,9 @@ jobs:
           echo "Using branch for SUSFS: $SUSFS_BRANCH"
 
           # Clone repositories using the branch names
-          git clone https://github.com/TheWildJames/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
+          git clone https://github.com/WildPlusKernel/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
-          git clone https://github.com/TheWildJames/kernel_patches.git
+          git clone https://github.com/WildPlusKernel/kernel_patches.git
       
       - name: Initialize and Sync Kernel Source
         run: |
@@ -62,11 +60,11 @@ jobs:
           
           # Initialize and sync kernel source
           echo "Initializing and syncing kernel source..."
-          $REPO init -u https://github.com/OnePlusOSS/kernel_manifest.git -b oneplus/sm8550 -m oneplus_11_v.xml --repo-rev=v2.16 --depth=1
+          repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b oneplus/sm8475 -m oneplus_11r_v.xml --repo-rev=v2.16 --depth=1
           
           # Sync repo and apply patches
-          $REPO --version
-          $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
+          repo --version
+          repo --trace sync -c -j$(nproc --all) --no-tags --fail-fast
 
       - name: Add KernelSU
         run: |
@@ -75,8 +73,8 @@ jobs:
           
           echo "Adding KernelSU..."
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -
-          cd ./KernelSU-Next/kernel
-          sed -i 's/ccflags-y += -DKSU_VERSION=16/ccflags-y += -DKSU_VERSION=12000/' ./Makefile
+          #cd ./KernelSU-Next/kernel
+          #sed -i 's/ccflags-y += -DKSU_VERSION=16/ccflags-y += -DKSU_VERSION=12000/' ./Makefile
 
       - name: Apply SUSFS Patches
         run: |
