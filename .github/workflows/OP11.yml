@@ -7,7 +7,7 @@ on:
   workflow_call:  # This allows this workflow to be called from another workflow
   
 jobs:
-  build-kernel-sultan-kernelsu-susfs:
+  build-kernel-op11-kernelsu-susfs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
