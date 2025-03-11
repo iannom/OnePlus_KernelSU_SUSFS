@@ -139,7 +139,7 @@ jobs:
       - name: Add SUSFS Configuration Settings
         run: |
           echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG"
+          cd "$CONFIG/kernel_platform"
           
           echo "Adding configuration settings to gki_defconfig..."
 
