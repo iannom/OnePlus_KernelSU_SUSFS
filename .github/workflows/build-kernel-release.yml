@@ -23,6 +23,9 @@ jobs:
   build-kernel-op12:
     uses: ./.github/workflows/op12.yml
     secrets: inherit
+  build-kernel-opnord4:
+    uses: ./.github/workflows/opnord4.yml
+    secrets: inherit
 
   trigger-release:
     runs-on: ubuntu-latest
@@ -30,6 +33,7 @@ jobs:
         - build-kernel-op11
         - build-kernel-op11r
         - build-kernel-op12
+        - build-kernel-opnord4
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: TheWildJames
