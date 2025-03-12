@@ -23,11 +23,17 @@ jobs:
   build-kernel-op12:
     uses: ./.github/workflows/op12.yml
     secrets: inherit
+  build-kernel-op13r:
+    uses: ./.github/workflows/op13r.yml
+    secrets: inherit
   build-kernel-opnord4:
     uses: ./.github/workflows/opnord4.yml
     secrets: inherit
   build-kernel-opopen:
     uses: ./.github/workflows/opopen.yml
+    secrets: inherit
+  build-kernel-opace5:
+    uses: ./.github/workflows/opace5.yml
     secrets: inherit
 
   trigger-release:
