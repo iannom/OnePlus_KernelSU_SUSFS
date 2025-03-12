@@ -210,6 +210,9 @@ jobs:
           git config --global user.name "TheWildJames"
           git add *
           git commit -s -a -m "getting rid of -dirty"
+          echo "RECOMPILE_KERNEL=0" >> $GITHUB_ENV
+          echo "LTO=thin" >> $GITHUB_ENV
+          echo "REPACK_IMG=false" >> $GITHUB_ENV
           ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ inputs.soc }} gki
 
       - name: Copy Images
