@@ -206,6 +206,10 @@ jobs:
           echo "Building the kernel..."
           rm ./kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
           rm ./kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
+          git config --global user.email "bins4us@hotmail.com"
+          git config --global user.name "TheWildJames"
+          git add *
+          git commit -s -a -m "getting rid of -dirty"
           ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ inputs.soc }} gki
 
       - name: Copy Images
