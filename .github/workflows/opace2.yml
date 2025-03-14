@@ -14,6 +14,6 @@ jobs:
       model: "OP-ACE-2"
       soc: "waipio"
       branch: "oneplus/sm8475"
-      manifest: "oneplus_11_v.xml"
+      manifest: "oneplus_ace2_v.xml"
       android_version: "android13"
       kernel_version: "5.15"
