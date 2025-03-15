@@ -51,6 +51,8 @@ jobs:
         - build-kernel-op13r
         - build-kernel-opnord4
         - build-kernel-opopen
+        - build-kernel-opace2
+        - build-kernel-opace2pro
         - build-kernel-opace5
     if: ${{ inputs.make_release }}
     env:
