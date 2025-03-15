@@ -32,6 +32,12 @@ jobs:
   build-kernel-opopen:
     uses: ./.github/workflows/opopen.yml
     secrets: inherit
+  build-kernel-opace2:
+    uses: ./.github/workflows/opace2.yml
+    secrets: inherit
+  build-kernel-opace2pro:
+    uses: ./.github/workflows/opace2pro.yml
+    secrets: inherit
   build-kernel-opace5:
     uses: ./.github/workflows/opace5.yml
     secrets: inherit
