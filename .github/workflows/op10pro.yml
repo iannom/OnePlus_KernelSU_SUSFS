@@ -1,0 +1,19 @@
+name: OP10pro
+permissions:
+  contents: write  # Allow writing to repository contents (for pushing tags)
+  actions: write   # Allows triggering actions
+
+on:
+  workflow_call:  # This allows this workflow to be called from another workflow
+  
+jobs:
+  build-kernel-op10pro-kernelsu-susfs:
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      model: "OP10pro"
+      soc: "waipio"
+      branch: "oneplus/sm8450"
+      manifest: "oneplus_10_pro_v.xml"
+      android_version: "android12"
+      kernel_version: "5.10"

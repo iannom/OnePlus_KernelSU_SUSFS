@@ -41,6 +41,12 @@ jobs:
   build-kernel-opace5:
     uses: ./.github/workflows/opace5.yml
     secrets: inherit
+  build-kernel-op10t:
+    uses: ./.github/workflows/op10t.yml
+    secrets: inherit
+  build-kernel-op10pro:
+    uses: ./.github/workflows/op10pro.yml
+    secrets: inherit
 
   trigger-release:
     runs-on: ubuntu-latest
@@ -54,6 +60,8 @@ jobs:
         - build-kernel-opace2
         - build-kernel-opace2pro
         - build-kernel-opace5
+        - build-kernel-op10t
+        - build-kernel-op10pro
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: TheWildJames
