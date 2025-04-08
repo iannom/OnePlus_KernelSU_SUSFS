@@ -30,22 +30,49 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 8192
-          temp-reserve-mb: 2048
-          swap-size-mb: 8192
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
+      - name: Setup System
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          echo "DEBIAN_FRONTEND=noninteractive" >> $GITHUB_ENV
+          
+          df -h
+          
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/powershell /usr/share/swift || true
+          sudo docker image prune --all --force
+          echo "some directories deleted"
+          
+          # Remove large unwanted packages
+          sudo apt-get purge -y \
+            aria2 ansible azure-cli shellcheck rpm xorriso zsync \
+            esl-erlang firefox gfortran-8 gfortran-9 google-chrome-stable \
+            google-cloud-sdk imagemagick \
+            libmagickcore-dev libmagickwand-dev libmagic-dev ant ant-optional kubectl \
+            mercurial apt-transport-https mono-complete libmysqlclient \
+            unixodbc-dev yarn chrpath libssl-dev libxft-dev \
+            libfreetype6 libfreetype6-dev libfontconfig1 libfontconfig1-dev \
+            snmp pollinate libpq-dev postgresql-client powershell ruby-full \
+            sphinxsearch subversion mongodb-org microsoft-edge-stable || true
+          
+          # Regex-based purges (for bulk families like mysql, php, dotnet)
+          sudo apt-get purge -y $(dpkg-query -W -f='${binary:Package}\n' | grep -E '^mysql|^php|^dotnet') || true
+          
+          # Clean up
+          sudo apt-get autoremove -y
+          sudo apt-get autoclean -y
+          echo "some packages purged"
+          
+          df -h
 
       - name: Install Repo and Python
         run: |
           # Install dependencies
           sudo apt update
-          sudo apt install repo python3 python-is-python3
+          sudo apt install -y python3 python-is-python3
+          
+          mkdir -p ./git-repo
+          curl -sSL https://storage.googleapis.com/git-repo-downloads/repo > ./git-repo/repo
+          chmod a+rx ./git-repo/repo
+          echo "REPO=$GITHUB_WORKSPACE/./git-repo/repo" >> $GITHUB_ENV
 
       - name: Set CONFIG Environment Variable
         run: |
@@ -80,11 +107,11 @@ jobs:
           
           # Initialize and sync kernel source
           echo "Initializing and syncing kernel source..."
-          repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b ${{ inputs.branch }} -m ${{ inputs.manifest }} --repo-rev=v2.16 --depth=1
+          $REPO init -u https://github.com/OnePlusOSS/kernel_manifest.git -b ${{ inputs.branch }} -m ${{ inputs.manifest }} --repo-rev=v2.16 --depth=1 --no-clone-bundle --no-tags
           
           # Sync repo and apply patches
-          repo --version
-          repo --trace sync -c -j$(nproc --all) --no-tags --fail-fast
+          $REPO --version
+          $REPO --trace sync -c --no-clone-bundle --no-tags --optimized-fetch -j$(nproc --all) --fail-fast
       
       - name: Add KernelSU
         run: |
@@ -92,11 +119,13 @@ jobs:
           cd "$CONFIG/kernel_platform"
           
           echo "Adding KernelSU..."
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -
-          #cd ./KernelSU-Next/kernel
-          #sed -i 's/ccflags-y += -DKSU_VERSION=16/ccflags-y += -DKSU_VERSION=12000/' ./Makefile
-          KSU_VERSION=$(cd ./KernelSU-Next/kernel && git describe --tags --abbrev=0)
-          echo "KSUVER=${KSU_VERSION}" >> $GITHUB_ENV
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+          
+          git submodule update --init --recursive
+          cd KernelSU-Next/kernel
+          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 10200)
+          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+          sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" Makefile
 
       - name: Apply SUSFS Patches
         run: |
@@ -109,15 +138,18 @@ jobs:
           cp ../../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch ./common/
           cp ../../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-
+          
           cd ./KernelSU-Next
           
           echo "Applying next SUSFS patches..."
-          cp ../../../kernel_patches/next/kernel-patch-susfs-v1.5.7-to-KernelSU-Next.patch ./
-          patch -p1 --forward < kernel-patch-susfs-v1.5.7-to-KernelSU-Next.patch || true
+          cp ../../../kernel_patches/next/0001-kernel-patch-susfs-v1.5.5-to-KernelSU-Next-v1.0.5.patch ./
+          patch -p1 --forward < 0001-kernel-patch-susfs-v1.5.5-to-KernelSU-Next-v1.0.5.patch || true
           
           # Change to common directory and apply SUSFS patch
           cd ../common
+          if [ "${{ inputs.soc }}" == "sun" ]; then
+            sed -i '/#include <trace\/hooks\/blk.h>/a #include <trace/hooks/fs.h>' ./fs/namespace.c
+          fi
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
 
       - name: Apply KSU Hooks
@@ -195,8 +227,10 @@ jobs:
           sed -i 's/export REPACK_IMG=true/export REPACK_IMG=false/g' ./oplus/build/oplus_setup.sh
          
           # Run perl command to modify UTS_VERSION
-          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./common/scripts/mkcompile_h
-          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Sat Apr 20 04:20:00 UTC 2024"}' ./msm-kernel/scripts/mkcompile_h
+          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Thu Mar 05 04:20:00 UTC 2025"}' ./common/scripts/mkcompile_h
+          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT Thu Mar 05 04:20:00 UTC 2025"}' ./msm-kernel/scripts/mkcompile_h
+          
+          find . -type f -exec sed -i 's/\(make\s\+-C[^\n]*\)\s\+/\1 -j$(nproc) /g' {} +
 
       - name: Build the Kernel
         run: |
@@ -204,24 +238,39 @@ jobs:
           cd "$CONFIG"
           
           echo "Building the kernel..."
+          # Clear Cache
+          sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
+          
           rm ./kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
           rm ./kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
-          #git config --global user.email "bins4us@hotmail.com"
-          #git config --global user.name "TheWildJames"
-          #git add *
-          #git commit -s -a -m "getting rid of -dirty"
+          
+          BUILD_TYPE="gki"
+          BAZEL_ARGS=(--jobs=$(nproc --all) --lto=thin)
+          if [ "${{ inputs.soc }}" == "sun" ]; then
+            BUILD_TYPE="perf"
+            BAZEL_ARGS+=(-g)
+          fi
+          
+          (stdbuf -oL bash -c '
+            while true; do
+              echo "=== $(date) ==="
+              free -h
+              echo "======"
+              df -h
+              echo "======"
+              top -b -n 1 | head -n 15
+              echo ""
+              sleep 60
+            done
+          ') &
+          MONITOR_PID=$!
+          trap "kill $MONITOR_PID" EXIT
+          
           if [ -f ./kernel_platform/build_with_bazel.py ]; then
-            ./kernel_platform/build_with_bazel.py \
-              -t ${{ inputs.soc }} \
-              gki \
-              --jobs=$(nproc --all) \
-              --verbose_failures \
-              --config=stamp \
-              --user_kmi_symbol_lists=//msm-kernel:android/abi_gki_aarch64_qcom \
-              --ignore_missing_projects \
-              -o "$(pwd)/out"
+            ./kernel_platform/oplus/bazel/oplus_modules_variant.sh ${{ inputs.soc }} "$BUILD_TYPE" ""
+            ./kernel_platform/build_with_bazel.py -t ${{ inputs.soc }} $BUILD_TYPE "${BAZEL_ARGS[@]}" -o "$(pwd)/out"
           else
-            ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ inputs.soc }} gki
+            LTO=thin ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ inputs.soc }} "$BUILD_TYPE"
           fi
 
       - name: Copy Images
@@ -231,6 +280,12 @@ jobs:
 
           echo "Copying Image"
           cp ./out/dist/Image ../AnyKernel3/Image
+          if [ "${{ inputs.model }}" == "OPAce5Pro" ]; then
+            cp ./out/dist/dtbo.img ../AnyKernel3/
+            cp ./out/dist/system_dlkm.erofs.img ../AnyKernel3/system_dlkm.img
+            # cp ./out/dist/vendor_dlkm.img ../AnyKernel3/
+            # cp ./out/dist/vendor_boot.img ../AnyKernel3/
+          fi
 
       - name: Create ZIP Files for Different Formats
         run: |
@@ -241,7 +296,12 @@ jobs:
           ZIP_NAME="${{ inputs.model }}_${{ inputs.android_version }}_${{ inputs.kernel_version }}_Next_SUSFS_AnyKernel3.zip"
           echo "Creating zip file $ZIP_NAME..."
           zip -r "../$ZIP_NAME" ./*
-          
+          # Fengchi Patch for OPAce5Pro
+          if [ "${{ inputs.model }}" == "OPAce5Pro" ]; then
+            sed -i 's/hmbird/xxbird/g' dtbo.img
+            zip -r "../$ZIP_NAME-CN-version.zip" ./*
+          fi
+
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
