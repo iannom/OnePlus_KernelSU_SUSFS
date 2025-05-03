@@ -146,7 +146,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.5 *TEST BUILD*"
       RELEASE_NOTES: |
-        This release contains KernelSU Next and SUSFS v1.5.5
+        This release contains KernelSU Next and SUSFS v1.5.7
         
         Module: 
         -> https://github.com/sidex15/ksu_module_susfs
@@ -156,7 +156,7 @@ jobs:
         
         Features:
         [+] KernelSU-Next
-        [+] SUSFS v1.5.5
+        [+] SUSFS v1.5.7
         [+] Wireguard Support
         [+] Maphide LineageOS Detections
         [+] Futile Maphide for jit-zygote-cache Detections
@@ -173,7 +173,7 @@ jobs:
             # Fetch the latest tag from GitHub (this is the latest tag based on the GitHub API)
             LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
             if [ -z "$LATEST_TAG" ]; then
-              LATEST_TAG="v1.5.5-r0"  # Default to v1.5.3-0 if no tag exists
+              LATEST_TAG="v1.5.7-r0"  # Default to v1.5.3-0 if no tag exists
             fi
             
             # Increment the suffix (e.g., v1.5.3-0 becomes v1.5.3-1)
