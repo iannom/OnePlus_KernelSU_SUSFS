@@ -12,9 +12,20 @@ on:
         required: true
         type: boolean
         default: true
+      ksun_branch:
+        description: "Choose KernelSU Next Branch"
+        required: true
+        type: choice
+        options:
+          - stable
+          - next
+          - next-susfs
+          - next-susfs-dev
+        default: stable
 
 jobs:
   build-batch-1: # Non Bazel Builds
+    name: build-batch-1 (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ inputs.ksun_branch }})
     strategy:
       fail-fast: false
       matrix:
@@ -70,9 +81,11 @@ jobs:
       manifest: ${{ matrix.manifest }}
       android_version: ${{ matrix.android_version }}
       kernel_version: ${{ matrix.kernel_version }}
+      ksun_branch: ${{ inputs.ksun_branch }}
 
   build-batch-2:
     # needs: build-batch-1
+    name: build-batch-2 (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ inputs.ksun_branch }})
     strategy:
       fail-fast: false
       matrix:
@@ -128,6 +141,7 @@ jobs:
       manifest: ${{ matrix.manifest }}
       android_version: ${{ matrix.android_version }}
       kernel_version: ${{ matrix.kernel_version }}
+      ksun_branch: ${{ inputs.ksun_branch }}
 
   trigger-release:
     needs:
@@ -139,10 +153,10 @@ jobs:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.5 *TEST BUILD*"
+      RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.7 *TEST BUILD*"
       RELEASE_NOTES: |
-        This release contains KernelSU Next and SUSFS v1.5.5
-
+        This release contains KernelSU Next and SUSFS v1.5.7
+        
         Module: 
         -> https://github.com/sidex15/ksu_module_susfs
 
@@ -165,7 +179,7 @@ jobs:
         run: |
             LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
             if [ -z "$LATEST_TAG" ]; then
-              LATEST_TAG="v1.5.5-r0"
+              LATEST_TAG="v1.5.7-r0"
             fi
             NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
             echo "New tag: $NEW_TAG"
