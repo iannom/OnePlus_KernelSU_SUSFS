@@ -40,7 +40,7 @@ jobs:
             soc: waipio
             branch: oneplus/sm8475
             manifest: oneplus_11r_v.xml
-            android_version: android13
+            android_version: android12
             kernel_version: "5.10"
           - model: OP-OPEN
             soc: kalama
@@ -70,6 +70,12 @@ jobs:
             soc: kalama
             branch: oneplus/sm8550
             manifest: oneplus_ace2pro_v.xml
+            android_version: android13
+            kernel_version: "5.15"
+          - model: OP12r
+            soc: kalama
+            branch: oneplus/sm8550
+            manifest: oneplus_12r_v.xml
             android_version: android13
             kernel_version: "5.15"
     uses: ./.github/workflows/build.yml
