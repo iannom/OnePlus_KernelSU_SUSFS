@@ -183,9 +183,12 @@ jobs:
 
       - name: Generate and Create New Tag
         run: |
+            BASE_TAG="v1.5.7-r0"
             LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
             if [ -z "$LATEST_TAG" ]; then
-              LATEST_TAG="v1.5.7-r0"
+              LATEST_TAG="$BASE_TAG"
+            else
+              LATEST_TAG=$(printf "%s\n%s\n" "$LATEST_TAG" "$BASE_TAG" | sort -rV | head -n1)
             fi
             NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
             echo "New tag: $NEW_TAG"
