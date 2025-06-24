@@ -11,6 +11,13 @@ By flashing this kernel, **YOU** are choosing to make these modifications. If so
 ---
 
 ### Proceed at your own risk!
+  
+<table>
+  <tr>
+    <th> :warning: </th>
+    <th> Verify <a href="https://github.com/WildKernels/OnePlus_KernelSU_SUSFS/compatibility.md">Compatibility</a> of kernels before flashing. </th>
+  </tr>
+</table>
 
 ---
 

@@ -3,42 +3,40 @@ permissions:
   contents: write  # Allow writing to repository contents (for pushing tags)
   actions: write   # Allows triggering actions
 
-on:
-  workflow_call: # This allows this workflow to be called from another workflow
-    inputs:
-      model:
-        required: true
-        type: string
-      soc:
-        required: true
-        type: string
-      branch:
-        required: true
-        type: string
-      manifest:
-        required: true
-        type: string
-      android_version:
-        required: true
-        type: string
-      kernel_version:
-        required: true
-        type: string
-      ksun_branch:
-        required: true
-        type: string
-        default: stable
-      susfs_branch:
-        required: true
-        type: string
-        default: ""
 
-jobs:
-  build-kernel-oneplus-kernelsu-susfs:
-    runs-on: ubuntu-latest
+inputs:
+  model:
+    required: true
+    type: string
+  soc:
+    required: true
+    type: string
+  branch:
+    required: true
+    type: string
+  manifest:
+    required: true
+    type: string
+  android_version:
+    required: true
+    type: string
+  kernel_version:
+    required: true
+    type: string
+  ksun_branch:
+    required: true
+    type: string
+    default: stable
+  susfs_branch:
+    required: true
+    type: string
+    default: ""
 
+runs:
+    using: "composite"
     steps:
       - name: Setup Build System
+        shell: bash
         run: |
           export DEBIAN_FRONTEND=noninteractive
           echo "DEBIAN_FRONTEND=noninteractive" >> $GITHUB_ENV
@@ -85,6 +83,7 @@ jobs:
           echo "CONFIG=${{ inputs.model }}" >> $GITHUB_ENV
 
       - name: Clone AnyKernel3 and Other Dependencies
+        shell: bash
         run: |
           echo "Cloning AnyKernel3 and other dependencies..."
           
@@ -101,10 +100,23 @@ jobs:
           
           # Clone repositories using the branch names
           git clone https://github.com/TheWildJames/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
           git clone https://github.com/TheWildJames/kernel_patches.git
+          
+          # Clone the repo with all branches and history (can optimize later if needed)
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git
+          cd susfs4ksu || exit 1
+          
+          # Try to check if TARGET_REF is a valid branch or tag
+          if git rev-parse --verify "origin/$SUSFS_BRANCH" >/dev/null 2>&1 || git rev-parse --verify "$SUSFS_BRANCH" >/dev/null 2>&1 ; then
+            # It's a branch or commit hash
+            git checkout "$SUSFS_BRANCH"
+          else
+            echo "Error: '$TARGET_REF' is neither a valid branch/tag nor a valid commit hash."
+            exit 1
+          fi
 
       - name: Initialize and Sync Kernel Source
+        shell: bash
         run: |
           echo "Creating folder for configuration: $CONFIG..."
           mkdir -p "$CONFIG"
@@ -119,6 +131,7 @@ jobs:
           $REPO --trace sync -c --no-clone-bundle --no-tags --optimized-fetch -j$(nproc --all) --fail-fast
       
       - name: Add KernelSU Next
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -132,6 +145,7 @@ jobs:
           fi
 
       - name: Apply SUSFS Patches
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -149,7 +163,7 @@ jobs:
           susfs_version=$(grep '#define SUSFS_VERSION' ../common/include/linux/susfs.h | awk -F'"' '{print $2}')
           echo "SUSVER=$susfs_version" >> $GITHUB_ENV
           BASE_VERSION=10200
-          KSU_VERSION=$(expr $(curl -sI -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/commits?sha=${{ inputs.ksun_branch }}&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" $BASE_VERSION)
+          KSU_VERSION=$(expr $(curl -sI "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/commits?sha=${{ inputs.ksun_branch }}&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" $BASE_VERSION)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           echo "KernelSU Next Version: $KSU_VERSION"
           echo "SusFS Version: $susfs_version"
@@ -197,6 +211,7 @@ jobs:
           fi
 
       - name: Apply KSUN Hooks
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform/common"
@@ -205,6 +220,7 @@ jobs:
           patch -p1 --fuzz=3 < ./manual_hooks.patch
           
       - name: Apply Hide Stuff Patches
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform/common"
@@ -213,6 +229,7 @@ jobs:
           patch -p1 -F 3 < 69_hide_stuff.patch
 
       - name: Add KernelSU-Next and SUSFS Configuration Settings
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -246,6 +263,7 @@ jobs:
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
 
       - name: Add BBR Support
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -261,6 +279,7 @@ jobs:
           echo "CONFIG_NET_SCH_FQ_CODEL=y" >> ./common/arch/arm64/configs/gki_defconfig
 
       - name: Add TTL Target Support
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -271,6 +290,7 @@ jobs:
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
 
       - name: Run sed and perl Commands
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -309,6 +329,7 @@ jobs:
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT $DATESTR"}' ./msm-kernel/scripts/mkcompile_h
 
       - name: Build the Kernel
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
@@ -350,6 +371,7 @@ jobs:
           fi
 
       - name: Create ZIP Files for Different Formats
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
