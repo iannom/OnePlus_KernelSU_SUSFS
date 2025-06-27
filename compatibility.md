@@ -40,4 +40,14 @@
 		<td align="center"> OnePlus 10T<br>OnePlus 10 Pro<br>OnePlus Ace 2<br>OnePlus 11r (Partially) </td>
 		<td align="center"> android12-5.10.209<br>android12-5.10.209<br>android12-5.10.209<br>android12-5.10.209 </td>
 	</tr>
+	<tr> 
+		<td align="center"> Realme GT 5 </td>
+		<td align="center"> OnePlus 11 </td>
+		<td align="center"> android13-5.15.149 </td>
+	</tr>
+	<tr> 
+		<td align="center"> Realme GT Neo 6SE<br>Realme GT Neo 6T </td>
+		<td align="center"> OnePlus Nord 4 </td>
+		<td align="center"> android14-6.1.75 </td>
+	</tr>
 </table>
