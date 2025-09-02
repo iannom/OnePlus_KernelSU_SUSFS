@@ -245,6 +245,12 @@ jobs:
             manifest: oneplus_pad_pro_v.xml
             android_version: android14
             kernel_version: "6.1"
+          - model: OP-Nord-5
+            soc: cliffs
+            branch: oneplus/sm8635
+            manifest: oneplus_nord_5.xml
+            android_version: android14
+            kernel_version: "6.1"
     runs-on: ubuntu-latest
     steps:
       - name: Select Appropriate SusFS Branch
