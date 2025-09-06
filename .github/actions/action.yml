@@ -71,6 +71,19 @@ runs:
         fi
         echo "Input validation OK."
 
+    - name: Install Minimal Dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Install deps"
+        sudo apt-get -o Acquire::Retries=3 update -qq
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          git curl ca-certificates build-essential clang lld flex bison \
+          libelf-dev libssl-dev libncurses-dev zlib1g-dev liblz4-tool \
+          libxml2-utils rsync unzip dwarves file python3
+        sudo apt-get clean
+        echo "::endgroup::"
+
     - name: Setup Base Environment
       shell: bash
       run: |
@@ -85,19 +98,6 @@ runs:
           chmod +x "$REPO"
         fi
         echo "REPO=$REPO" >> "$GITHUB_ENV"
-
-    - name: Install Minimal Dependencies
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "::group::Install deps"
-        sudo apt-get -o Acquire::Retries=3 update -qq
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-          git curl ca-certificates build-essential clang lld flex bison \
-          libelf-dev libssl-dev libncurses-dev zlib1g-dev liblz4-tool \
-          libxml2-utils rsync unzip dwarves file python3
-        sudo apt-get clean
-        echo "::endgroup::"
 
     - name: Clone AnyKernel3 and Other Dependencies
       shell: bash
