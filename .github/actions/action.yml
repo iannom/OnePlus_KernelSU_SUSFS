@@ -197,11 +197,9 @@ runs:
         cd "$CONFIG/kernel_platform"
         echo "Adding KernelSU Next..."
         if [ "${{ inputs.ksun_branch }}" = "stable" ]; then
-          curl --fail --location --proto '=https' \
-            -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -
+          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -
         else
-          curl --fail --location --proto '=https' \
-            -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s "${{ inputs.ksun_branch }}"
+          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s "${{ inputs.ksun_branch }}"
         fi
         git submodule update --init --recursive
 
