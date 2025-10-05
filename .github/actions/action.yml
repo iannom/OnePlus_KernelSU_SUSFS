@@ -455,8 +455,7 @@ runs:
         OUT="$COMMON/out"
         IMG="$OUT/arch/arm64/boot/Image"
         WARNINGS_COUNT=$(grep -i -E 'warning:' "$COMMON/build.log" | wc -l || true)
-        WARNINGS=$(grep -i -E 'warning:' "$COMMON/build.log" | base64 -w 0 || true)
-        echo "$WARNINGS" | base64 --decode > "$OUT/warnings.txt"
+        echo "$WARNINGS_COUNT" > "$OUT/warnings.txt"
         file "$IMG" > "$OUT/Image.file"
         KERNEL_UNAME=$(strings "$IMG" | grep -E 'Linux version.*#' | tail -n1)
         echo "Kernel Uname: $KERNEL_UNAME"
@@ -474,7 +473,6 @@ runs:
         IMAGE_SHA256=$(cut -d' ' -f1 "$OUT/Image.sha256")
         echo "Image sha256: $IMAGE_SHA256"
         echo "warnings_count=$WARNINGS_COUNT" >> "$GITHUB_OUTPUT"
-        echo "warnings=$WARNINGS" >> "$GITHUB_OUTPUT"
         echo "image_sha256=$IMAGE_SHA256" >> "$GITHUB_OUTPUT"
 
     - name: Create Kernel ZIP
@@ -528,7 +526,6 @@ runs:
           echo "Image SHA256: ${{ steps.collect_stats.outputs.image_sha256 }}"
           echo "Compiler: ${CLANG_VERSION:-unknown}"
           echo "Warnings Count: ${{ steps.collect_stats.outputs.warnings_count }}"
-          echo "Warnings: ${{ steps.collect_stats.outputs.warnings }}" | base64 --decode
         } | tee summary.txt
         {
           echo "### Kernel Build Summary"
@@ -542,7 +539,6 @@ runs:
           echo "- Optimization: ${{ inputs.optimize_level }}"
           echo "- Image SHA256: ${{ steps.collect_stats.outputs.image_sha256 }}"
           echo "- Warnings Count: ${{ steps.collect_stats.outputs.warnings_count }}"
-          echo "- Warnings: ${{ steps.collect_stats.outputs.warnings }}" | base64 --decode
         } >> "$GITHUB_STEP_SUMMARY"
     
     - name: Upload Artifacts
