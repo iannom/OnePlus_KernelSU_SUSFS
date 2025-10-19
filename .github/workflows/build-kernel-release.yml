@@ -333,6 +333,7 @@ jobs:
           - [+] BBR v1 Support
           - [+] HMBIRD scx support for OnePlus 13 & OnePlus Ace 5 Pro
           - [+] Baseband Guard Support (BBG).
+          - [+] IP Set Support.
           EOF
           
           # Output for debugging
