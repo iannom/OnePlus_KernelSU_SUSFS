@@ -5,5 +5,10 @@
   "manifest": "oneplus_11r_v.xml",
   "android_version": "android12",
   "kernel_version": "5.10",
-  "hmbird": false
+  "os_version": "OOS15",
+  "hmbird": false,
+  "bbg": true,
+  "bbr": true,
+  "ttl": true,
+  "ip_set": true
 }

@@ -17,40 +17,17 @@ on:
         required: true
         type: choice
         options:
-          - ALL
+          - OOS14+15+16
+          - OOS15+16
+          - OOS14+15
+          - OOS16
+          - OOS15
+          - OOS14
           - android15-6.6
           - android14-6.1
-          - android14-5.15
           - android13-5.15
-          - android13-5.10
           - android12-5.10
-          - OP13-CPH
-          - OP13-PJZ
-          - OP13r
-          - OP13S
-          - OP13T
-          - OP12
-          - OP12r
-          - OP11
-          - OP11r
-          - OP10pro
-          - OP10t
-          - OP-Nord-5
-          - OP-NORD-4
-          - OP-NORD-4-CE
-          - OP-NORD-CE4-LITE
-          - OP-ACE-5-PRO
-          - OP-ACE-5
-          - OP-ACE-3-PRO
-          - OP-ACE-3V
-          - OP-ACE-2-PRO
-          - OP-ACE-2
-          - OP-OPEN
-          - OP-PAD-3
-          - OP-PAD-2-PRO
-          - OP-PAD-2
-          - OP-PAD-PRO
-        default: ALL
+        default: OOS15
       ksun_branch:
         description: 'Enter KernelSU Next Branch or commit hash (blank for stable tag)'
         required: true
@@ -105,43 +82,60 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          declare -a models=()
-          while IFS= read -r -d '' file; do
-            model=$(basename "$file" .json)
-            models+=("$model")
-          done < <(find configs/ -name "*.json" -print0)
-        
-          if [ ${#models[@]} -eq 0 ]; then
-            echo "Error: No config files found in configs/ directory!"
-            exit 1
-          fi
+          FILTERED_FOR_ANDROID=false
+          input="${{ github.event.inputs.op_model }}"
         
           echo "[" > matrix.json
-          for i in "${!models[@]}"; do
-            model="${models[$i]}"
-            file="configs/$model.json"
+          mapfile -t all_json_files < <(find configs/ -name "*.json" -print0 | xargs -0 -n1)
+          for i in "${!all_json_files[@]}"; do
+            file="${all_json_files[$i]}"
             if [ -f "$file" ]; then
               jq -r '.' "$file" >> matrix.json
-              if [ $((i+1)) -lt ${#models[@]} ]; then
+              if [ $((i+1)) -lt ${#all_json_files[@]} ]; then
                 echo "," >> matrix.json
               fi
             fi
           done
           echo "]" >> matrix.json
         
-          input="${{ github.event.inputs.op_model }}"
           jq_filter="."
         
-          if [[ "$input" == "ALL" ]]; then
-            :
-          elif [[ "$input" == android*-* ]]; then
-            IFS='-' read -r av kv <<< "$input"
-            jq_filter="map(select(.android_version == \"$av\" and .kernel_version == \"$kv\"))"
-          else
-            jq_filter="map(select(.model == \"$input\"))"
-          fi
+          case "$input" in
+            OOS14+15+16)
+              ;;
+            OOS15+16)
+              jq_filter="map(select(.os_version == \"OOS15\" or .os_version == \"OOS16\"))"
+              ;;
+            OOS14+15)
+              jq_filter="map(select(.os_version == \"OOS14\" or .os_version == \"OOS15\"))"
+              ;;
+            OOS16)
+              jq_filter="map(select(.os_version == \"OOS16\"))"
+              ;;
+            OOS15)
+              jq_filter="map(select(.os_version == \"OOS15\"))"
+              ;;
+            OOS14)
+              jq_filter="map(select(.os_version == \"OOS14\"))"
+              ;;
+            android*-*.*)
+              IFS='-' read -r av kv <<< "$input"
+              jq_filter="map(select(.os_version == \"OOS15\" or .os_version == \"OOS16\")) | map(select(.android_version == \"$av\" and .kernel_version == \"$kv\"))"
+              FILTERED_FOR_ANDROID=true
+              ;;
+            *)
+              echo "Warning: Unknown input '$input'. Using empty filter." >&2
+              jq_filter="map(select(false))"
+              ;;
+          esac
         
           filtered=$(jq -c "$jq_filter" matrix.json)
+        
+          if ! jq -e '. | length > 0' <<< "$filtered" >/dev/null 2>&1; then
+              echo "Error: No config files found for input '$input' after applying filters!" >&2
+              exit 1
+          fi
+        
           wrapped=$(jq -n --argjson items "$filtered" '{ include: $items }')
         
           echo "matrix<<MATRIX_EOF" >> "$GITHUB_OUTPUT"
@@ -149,7 +143,7 @@ jobs:
           echo "MATRIX_EOF" >> "$GITHUB_OUTPUT"
 
   build:
-    name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ inputs.ksun_branch }})
+    name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ matrix.os_version }}, ${{ inputs.ksun_branch }})
     needs: set-op-model
     runs-on: ubuntu-latest
     strategy:
@@ -243,16 +237,22 @@ jobs:
           
           ### Built Devices
           
-          | Model | Kernel Version |
-          |-------|----------------|
+          | Model | OS Version | Kernel Version |
+          |-------|------------|----------------|
           EOF
           
           # Generate table rows
           for file in $(find downloaded-artifacts -name "*.txt" -type f | sort); do
             if [ -f "$file" ]; then
-              model=$(basename "$file" .txt)
-              version=$(cat "$file")
-              printf "| %-12s | %-16s |\n" "$model" "$version" >> release_notes.md
+              full_model=$(basename "$file" .txt)
+              model=$(echo "$full_model" | sed -E 's/_[^_]*$//')
+              os_version=$(sed -n '2p' "$file")
+              kernel_version=$(sed -n '1p' "$file")
+              if [ -n "$model" ] && [ -n "$os_version" ] && [ -n "$kernel_version" ]; then
+                printf "| %-12s | %-10s | %-16s |\n" "$model" "$os_version" "$kernel_version" >> release_notes.md
+              else
+                echo "Warning: Could not read kernel version or OS version from $file. Skipping row for $model."
+              fi
             fi
           done
           
