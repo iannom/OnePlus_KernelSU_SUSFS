@@ -914,8 +914,9 @@ runs:
         
         export LLVM=1 LLVM_IAS=1
         export ARCH=arm64 SUBARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-android-
-        export CROSS_COMPILE_COMPAT=arm-linux-androideabi-
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export RUSTC="$KERNEL_PATH/prebuilts/rust/linux-x86/1.73.0b/bin/rustc"
+        export PAHOLE="$KERNEL_PATH/prebuilts/kernel-build-tools/linux-x86/bin/pahole"
         export LD=ld.lld HOSTLD=ld.lld AR=llvm-ar NM=llvm-nm 
         export OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
     
