@@ -290,7 +290,7 @@ jobs:
         run: |
           if command -v ccache >/dev/null 2>&1; then
             echo "::group::ccache configuration"
-            ccache -o max_size=8.0G
+            ccache -o max_size=1.0G
             ccache -o compression=true
             ccache -o compression_level=3
             ccache -s

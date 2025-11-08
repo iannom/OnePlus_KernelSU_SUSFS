@@ -1095,13 +1095,6 @@ runs:
         ccache -s >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
 
-    - name: Save ccache
-      if: ${{ success() && inputs.clean != 'true' }}
-      uses: actions/cache/save@v4
-      with:
-        path: ${{ env.ccache_dir }}
-        key: ccache-ksun-v3-${{ env.ANDROID_VER }}-${{ env.KERNEL_VER }}-${{ env.OP_OS_VERSION }}-${{ env.CLANG_VERSION_SHORT }}-${{ env.OP_MODEL }}-${{ github.run_id }}
-
     - name: Collect Build Stats / Validate Image
       id: collect_stats
       shell: bash
