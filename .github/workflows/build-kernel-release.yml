@@ -598,7 +598,7 @@ jobs:
           ### 🔧 System Features
           - **TMPFS_XATTR** - Extended attributes for tmpfs (Mountify support)
           - **TMPFS_POSIX_ACL** - POSIX ACLs for tmpfs
-          - **HMBIRD SCX** - OnePlus 13 & Ace 5 Pro scheduler extensions
+          - **HMBIRD SCX** - Scheduler extensions for all sm8750 devices
           
           ---
           
@@ -623,6 +623,7 @@ jobs:
           ### Prerequisites
           - Unlocked bootloader
           - Backup your current boot image
+          - Have root access using Magisk / KernelSU (Any forks) / Apatch
           
           ### Via Custom Recovery
           1. Download the appropriate ZIP for your device
@@ -637,7 +638,7 @@ jobs:
           
           ### This Release
           - Updated SUSFS to v1.5.12
-          - Added HMBIRD support for OP13/Ace5Pro
+          - Added HMBIRD support for all sm8750 devices.
           - Improved ccache build system
           - Enhanced SUSFS hiding capabilities
           - Added IP_SET and TTL support
@@ -653,7 +654,6 @@ jobs:
           - **KernelSU Next Team** - Root solution
           - **simonpunk** - SUSFS development
           - **OnePlus** - Kernel source code
-          - **LineageOS Team** - Kernel patches and improvements
           - **Community Contributors** - Testing and feedback
           
           ---

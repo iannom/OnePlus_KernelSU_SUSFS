@@ -6,7 +6,7 @@
   "android_version": "android15",
   "kernel_version": "6.6",
   "os_version": "OOS15",
-  "hmbird": false,
+  "hmbird": true,
   "bbg": true,
   "bbr": true,
   "ttl": true,
