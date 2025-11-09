@@ -907,10 +907,10 @@ runs:
         export KCFLAGS="${KCFLAGS:-} $MAP $MPMAP $FPMAP -no-canonical-prefixes -fdiagnostics-color=never -Qunused-arguments -Wno-unused-command-line-argument"
         export KCPPFLAGS="${KCPPFLAGS:-} $MAP $MPMAP $FPMAP"
         
-        export CC="clang"
-        export CXX="clang++"
-        export HOSTCC="clang"
-        export HOSTCXX="clang++"
+        export CC="ccache clang"
+        export CXX="ccache clang++"
+        export HOSTCC="ccache clang"
+        export HOSTCXX="ccache clang++"
         
         export LLVM=1 LLVM_IAS=1
         export ARCH=arm64 SUBARCH=arm64
