@@ -242,6 +242,7 @@ jobs:
       - name: 🔍 Resolve SUSFS branch from inputs
         id: susfs
         shell: bash
+        if: ${{ matrix.susfs == 'true' }}
         run: |
           set -euo pipefail
           
@@ -322,7 +323,9 @@ jobs:
           echo "Device: ${{ matrix.model }}"
           echo "OS Version: ${{ matrix.os_version }}"
           echo "Kernel: ${{ matrix.android_version }}-${{ matrix.kernel_version }}"
-          echo "SUSFS Branch: ${{ steps.susfs.outputs.susfs_branch }}"
+          if [ "${{ matrix.susfs }}" = true ]; then
+            echo "SUSFS Branch: ${{ steps.susfs.outputs.susfs_branch }}"
+          fi
           echo "Status: ${{ job.status }}"
           
           if [ "${{ steps.build.outcome }}" = "success" ]; then
@@ -332,7 +335,9 @@ jobs:
             echo "Outputs:"
             echo "  - Kernel: ${{ steps.build.outputs.kernel_version }}"
             echo "  - KSU Next: v${{ steps.build.outputs.ksu_version }}"
-            echo "  - SUSFS: ${{ steps.build.outputs.susfs_version }}"
+            if [ "${{ matrix.susfs }}" = true ]; then
+              echo "  - SUSFS: ${{ steps.build.outputs.susfs_version }}"
+            fi
             echo "  - Build time: ${{ steps.build.outputs.build_time }}s"
             
             if [ "${{ inputs.clean_build }}" != "true" ]; then
@@ -358,10 +363,14 @@ jobs:
           
           ### ${{ matrix.model }} (${{ matrix.os_version }}) - ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}
           
-          **Kernel:** ${{ matrix.android_version }}-${{ matrix.kernel_version }}  
-          **SUSFS Branch:** \`${{ steps.susfs.outputs.susfs_branch || format('(auto: gki-{0}-{1})', matrix.android_version, matrix.kernel_version) }}\`
-          
+          **Kernel:** ${{ matrix.android_version }}-${{ matrix.kernel_version }}
           EOF
+          
+          if [ "${{ matrix.susfs }}" = true ]; then
+            cat >> $GITHUB_STEP_SUMMARY << EOF
+          **SUSFS Branch:** \`${{ steps.susfs.outputs.susfs_branch || format('(auto: gki-{0}-{1})', matrix.android_version, matrix.kernel_version) }}\`
+          EOF
+          fi
           
           if [ "${{ steps.build.outcome }}" = "success" ]; then
             cat >> $GITHUB_STEP_SUMMARY << EOF
@@ -369,7 +378,13 @@ jobs:
           |--------|-------|
           | **Kernel** | ${{ steps.build.outputs.kernel_version }} |
           | **KSU Next** | v${{ steps.build.outputs.ksu_version }} |
+          EOF
+          if [ "${{ matrix.susfs }}" = true ]; then
+            cat >> $GITHUB_STEP_SUMMARY << EOF
           | **SUSFS** | ${{ steps.build.outputs.susfs_version }} |
+          EOF
+          fi
+          cat >> $GITHUB_STEP_SUMMARY << EOF
           | **Build Time** | ${{ steps.build.outputs.build_time }}s |
           EOF
             
@@ -511,7 +526,7 @@ jobs:
             feature_flags=$(jq -r --arg MODEL "$model" '
               .[] | 
               select(.model == $MODEL) |
-              "\(.hmbird // false)\t\(.bbr // false)\t\(.bbg // false)\t\(.ttl // false)\t\(.ip_set // false)"
+              "\(.hmbird // false)\t\(.susfs // false)\t\(.bbr // false)\t\(.bbg // false)\t\(.ttl // false)\t\(.ip_set // false)"
             ' <<< "$JSON_BUILD_DATA")
             
             features=""
@@ -519,10 +534,11 @@ jobs:
             if [[ -z "$feature_flags" ]]; then
               echo "Warning: No JSON entry found for model: $model" >&2
             else
-              IFS=$'\t' read -r hmbird bbr bbg ttl ip_set <<< "$feature_flags"
+              IFS=$'\t' read -r hmbird susfs bbr bbg ttl ip_set <<< "$feature_flags"
               
               # Build features string based on boolean values
               [[ "$hmbird" == "true" ]] && features+="🐦 HMBIRD "
+              [[ "$susfs" == "true" ]] && features+="ඞ SusFS "
               [[ "$bbr" == "true" ]] && features+="🚀 BBR "
               [[ "$bbg" == "true" ]] && features+="🛡️ BBG "
               [[ "$ttl" == "true" ]] && features+="⏱️ TTL "

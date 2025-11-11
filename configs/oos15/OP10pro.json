@@ -7,6 +7,7 @@
   "kernel_version": "5.10",
   "os_version": "OOS15",
   "hmbird": false,
+  "susfs": true,
   "bbg": true,
   "bbr": true,
   "ttl": true,
