@@ -879,8 +879,9 @@ runs:
         COMMIT_DATE=$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M:%S' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S')
         COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
         
+        KERNEL_BUILD_DATE=$(date -u)
         export SOURCE_DATE_EPOCH=$COMMIT_TIMESTAMP
-        export KBUILD_BUILD_TIMESTAMP="$COMMIT_DATE UTC"
+        export KBUILD_BUILD_TIMESTAMP="$KERNEL_BUILD_DATE"
         export KBUILD_BUILD_USER="${BUILD_USER:-builder}"
         export KBUILD_BUILD_HOST="${BUILD_HOST:-github-actions}"
         export KBUILD_BUILD_VERSION=1
