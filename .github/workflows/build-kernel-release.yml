@@ -248,7 +248,7 @@ jobs:
       - name: 🔍 Resolve SUSFS branch from inputs
         id: susfs
         shell: bash
-        if: ${{ matrix.susfs == 'true' }}
+        if: ${{ matrix.susfs }}
         run: |
           set -euo pipefail
           
