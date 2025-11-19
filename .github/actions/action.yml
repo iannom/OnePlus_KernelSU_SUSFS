@@ -5,16 +5,23 @@ inputs:
     description: 'JSON string containing full device config'
     required: true
     type: string
-  ksun_branch:
-    description: 'KernelSU Next branch to use'
+  ksu_type:
+    description: 'Select KSU Type'
     required: true
+    type: choice
+    options:
+      - KSUN
+      - KSU
+  ksu_branch_or_hash:
+    description: 'KSU branch or commit hash (empty = auto-detect by ksu_type)'
+    required: false
     type: string
-    default: stable
+    default: ""
   susfs_commit_hash_or_branch:
     description: 'SUSFS branch or commit hash (empty = auto-detect by kernel version)'
     required: false
     type: string
-    default: "" 
+    default: ""
   optimize_level:
     description: 'Compiler optimization level (O2 or O3)'
     required: false
@@ -33,6 +40,9 @@ outputs:
   ksu_version:
     description: 'KernelSU Next version number'
     value: ${{ steps.save_metadata.outputs.ksu_version }}
+  ksu_type:
+    description: 'KernelSU Next version number'
+    value: ${{ steps.save_metadata.outputs.ksu_type }}
   susfs_version:
     description: 'SUSFS version string'
     value: ${{ steps.save_metadata.outputs.susfs_version }}
@@ -599,15 +609,16 @@ runs:
 
     - name: Add KernelSU Next
       shell: bash
+      if: ${{ inputs.ksu_type == 'KSUN' }}
       run: |
         set -euo pipefail
         echo "::group::Add KernelSU Next"
         cd "$CONFIG/kernel_platform"
         echo "Adding KernelSU Next..."
-        if [ "${{ inputs.ksun_branch }}" = "stable" ]; then
+        if [ "${{ inputs.ksu_branch_or_hash }}" = "" ]; then
           curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -
         else
-          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s "${{ inputs.ksun_branch }}"
+          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s "${{ inputs.ksu_branch_or_hash }}"
         fi
         git submodule update --init --recursive
         cd KernelSU-Next/kernel
@@ -616,12 +627,40 @@ runs:
         sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" Makefile
         
         cd ..
-        KSUN_COMMIT_SHA=$(git rev-parse HEAD)
-        echo "KSUN_COMMIT_SHA=$KSUN_COMMIT_SHA" >> $GITHUB_ENV
+        KSU_COMMIT_SHA=$(git rev-parse HEAD)
+        echo "KSU_COMMIT_SHA=$KSU_COMMIT_SHA" >> $GITHUB_ENV
         
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
         echo "KernelSU Next Version: $KSU_VERSION"
-        echo "✅ KernelSU Next added (commit: ${KSUN_COMMIT_SHA:0:8})"
+        echo "✅ KernelSU Next added (commit: ${KSU_COMMIT_SHA:0:8})"
+        echo "::endgroup::"
+
+    - name: Add KernelSU
+      shell: bash
+      if: ${{ inputs.ksu_type == 'KSU' }}
+      run: |
+        set -euo pipefail
+        echo "::group::Add KernelSU"
+        cd "$CONFIG/kernel_platform"
+        echo "Adding KernelSU..."
+        if [ "${{ inputs.ksu_branch_or_hash }}" = "" ]; then
+          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+        else
+          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s "${{ inputs.ksu_branch_or_hash }}"
+        fi
+        git submodule update --init --recursive
+        cd KernelSU/kernel
+        BASE_VERSION=20000
+        KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" $BASE_VERSION)
+        sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" Makefile
+        
+        cd ..
+        KSU_COMMIT_SHA=$(git rev-parse HEAD)
+        echo "KSU_COMMIT_SHA=$KSU_COMMIT_SHA" >> $GITHUB_ENV
+        
+        echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+        echo "KernelSU Version: $KSU_VERSION"
+        echo "✅ KernelSU added (commit: ${KSU_COMMIT_SHA:0:8})"
         echo "::endgroup::"
 
     - name: Apply SUSFS Patches
@@ -635,41 +674,77 @@ runs:
         cp ../../susfs4ksu/kernel_patches/50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch ./common/
         cp ../../susfs4ksu/kernel_patches/fs/* ./common/fs/
         cp ../../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-        cd ./KernelSU-Next
-        susfs_version=$(grep '#define SUSFS_VERSION' ../common/include/linux/susfs.h | awk -F'"' '{print $2}')
+        
+        susfs_version=$(grep '#define SUSFS_VERSION' ./common/include/linux/susfs.h | awk -F'"' '{print $2}')
         echo "SUSVER=$susfs_version" >> $GITHUB_ENV
         echo "SusFS Version: $susfs_version"
+        
+        # Function to compare semantic versions
+        version_lte() {
+          [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$1" ]
+        }
+        
+        if version_lte "${susfs_version:1}" "1.5.12"; then
+          echo "NEED_HOOKS=true" >> $GITHUB_ENV
+        else
+          echo "NEED_HOOKS=false" >> $GITHUB_ENV
+        fi
+        
         case "$susfs_version" in
           "v1.5.5"|"v1.5.6"|"v1.5.7")
-            cp "../../../kernel_patches/next/0001-kernel-implement-susfs-v1.5.5-v1.5.7-KSUN-v1.0.8.patch" "./ksun_susfs_latest.patch"
+            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
+              cd ./KernelSU-Next
+              patch -p1 --forward < "../../../kernel_patches/next/0001-kernel-implement-susfs-v1.5.5-v1.5.7-KSUN-v1.0.8.patch" || true
+            else
+              echo "Not Implemented!"
+              exit 1
+            fi
             ;;
           "v1.5.8")
+            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
+              cd ./KernelSU-Next
+            else
+              cd ./KernelSU
+            fi
             cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-            patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch  || true
-            cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_apk_sign.c.patch" ./
-            patch -p1 --forward --fuzz=3 < fix_apk_sign.c.patch
-            cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_core_hook.c.patch" ./
-            patch -p1 --forward --fuzz=3 < fix_core_hook.c.patch
-            cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_selinux.c.patch" ./
-            patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
-            cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
-            patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
+            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
+              patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch  || true
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_apk_sign.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_apk_sign.c.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_core_hook.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_core_hook.c.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_selinux.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
+            else
+              patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch
+            fi
             ;;
-          "v1.5.9"|"v1.5.10"|"v1.5.11"|"v1.5.12")
+          "v1.5.9"|"v1.5.10"|"v1.5.11"|"v1.5.12"|"v2.0.0")
+            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
+              cd ./KernelSU-Next
+            else
+              cd ./KernelSU
+            fi
             cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-            patch -p1 --forward < 10_enable_susfs_for_ksu.patch  || true
-            for file in $(find ./kernel -maxdepth 2 -name "*.rej" -printf "%f\n" | cut -d'.' -f1); do
-              echo "Patching file: $file.c with fix_$file.c.patch"
-              patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_$file.c.patch"
-            done
-            patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_kernel_compat.c.patch"
+            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
+              patch -p1 --forward < 10_enable_susfs_for_ksu.patch  || true
+              for file in $(find ./kernel -maxdepth 2 -name "*.rej" -printf "%f\n" | cut -d'.' -f1); do
+                echo "Patching file: $file.c with fix_$file.c.patch"
+                patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_$file.c.patch"
+              done
+              patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_kernel_compat.c.patch"
+            else
+              patch -p1 --forward < 10_enable_susfs_for_ksu.patch
+            fi
             ;;
           *)
             echo "::error::Unsupported SUSFS version: $susfs_version"
             exit 1
             ;;
         esac
-        patch -p1 --forward < ksun_susfs_latest.patch || true
+        
         cd ../common
         if [ "${{ env.ANDROID_VER }}" = "android15" ] && [ "${{ env.KERNEL_VER }}" = "6.6" ]; then
           if ! grep -qxF '#include <trace/hooks/fs.h>' ./fs/namespace.c; then
@@ -771,20 +846,22 @@ runs:
         echo "✅ Other patches applied"
         echo "::endgroup::"
 
-    - name: Apply KSUN Hooks
+    - name: Apply KSU Hooks
       shell: bash
+      if: ${{ env.NEED_HOOKS == 'true' }}
       run: |
         set -euo pipefail
-        echo "::group::Apply KSUN hooks"
+        echo "::group::Apply KSU hooks"
         cd "$CONFIG/kernel_platform/common"
         patch -p1 < ../../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch
-        echo "✅ KSUN hooks applied"
+        echo "✅ KSU hooks applied"
         echo "::endgroup::"
 
-    - name: Add KernelSU-Next and SUSFS Configuration Settings
+    - name: Add KSU / KSUN and SUSFS Configuration Settings
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::Add KSU / KSUN and SUSFS Configuration Settings"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_KSU=y
@@ -811,11 +888,12 @@ runs:
         EOF
         echo "::endgroup::"
 
-    - name: Add Oneplus BBR
+    - name: Add BBR
       if: ${{ env.OP_BBR == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::Add BBR"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_TCP_CONG_ADVANCED=y
@@ -830,6 +908,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::Add TTL Target Support"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_IP_NF_TARGET_TTL=y
@@ -843,6 +922,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::Add IP SET Support"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_IP_SET=y
@@ -870,6 +950,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::Add Build based configs"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_LTO_CLANG_THIN=y
@@ -885,11 +966,13 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::Save Build Metadata"
         CONFIG_DIR="$GITHUB_WORKSPACE/$CONFIG"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         cd "$ARTIFACTS_DIR"
         echo "kernel_version=${{ env.KERNEL_FULL_VER }}" >> "$GITHUB_OUTPUT"
         echo "ksu_version=${KSUVER:-unknown}" >> "$GITHUB_OUTPUT"
+        echo "ksu_type=${{ inputs.ksu_type }}" >> "$GITHUB_OUTPUT"
         if [ "${{ env.OP_SUSFS }}" = true ]; then
           echo "susfs_version=${SUSVER:-unknown}" >> "$GITHUB_OUTPUT"
         fi
@@ -899,6 +982,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::Customize Kernel Branding"
         KERNEL_PATH="$GITHUB_WORKSPACE/$CONFIG/kernel_platform"
         cd "$KERNEL_PATH/common"
         mkdir -p out
@@ -1210,7 +1294,7 @@ runs:
         cp "$IMAGE_PATH" "$GITHUB_WORKSPACE/AnyKernel3/Image"
         cd "$GITHUB_WORKSPACE/AnyKernel3"
         
-        ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_Next_${KSUVER}_${SUSVER}.zip"
+        ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_${{ inputs.ksu_type }}_${KSUVER}_${SUSVER}.zip"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         mkdir -p "$ARTIFACTS_DIR"
         
@@ -1247,7 +1331,7 @@ runs:
         set -euo pipefail
         
         # Get commit SHAs with fallback
-        KSUN_SHA="${KSUN_COMMIT_SHA:-unknown}"
+        KSU_SHA="${KSU_COMMIT_SHA:-unknown}"
         SUSFS_SHA="${SUSFS_COMMIT_SHA:-unknown}"
         
         {
@@ -1259,8 +1343,13 @@ runs:
           echo "Kernel Uname: ${{ env.KERNEL_UNAME }}"
           echo "Build User: ${{ env.BUILD_USER }}"
           echo "Build Host: ${{ env.BUILD_HOST }}"
-          echo "KSUN Version: ${KSUVER:-unknown}"
-          echo "KSUN commit SHA: $KSUN_SHA"
+          if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
+            echo "KSUN Version: ${KSUVER:-unknown}"
+            echo "KSUN commit SHA: $KSU_SHA"
+          else
+            echo "KSU Version: ${KSUVER:-unknown}"
+            echo "KSU commit SHA: $KSU_SHA"
+          fi
           if [ "${{ env.OP_SUSFS }}" = true ]; then
             echo "SUSFS Version: ${SUSVER:-unknown}"
             echo "SUSFS Branch: ${{ env.SUSFS_BRANCH_NAME }}"
@@ -1299,12 +1388,20 @@ runs:
           echo "| **Kernel Uname** | \`${{ env.KERNEL_UNAME }}\` |"
           echo "| **Build User** | ${{ env.BUILD_USER }} |"
           echo "| **Build Host** | ${{ env.BUILD_HOST }} |"
-          echo "| **KSUN Version** | ${KSUVER:-unknown} |"
-          
-          if [ "$KSUN_SHA" != "unknown" ]; then
-            echo "| **KSUN Commit** | [\`${KSUN_SHA:0:8}\`](https://github.com/KernelSU-Next/KernelSU-Next/commit/$KSUN_SHA) |"
+          if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
+            echo "| **KSUN Version** | ${KSUVER:-unknown} |"
           else
-            echo "| **KSUN Commit** | unknown |"
+            echo "| **KSU Version** | ${KSUVER:-unknown} |"
+          fi
+          
+          if [ "$KSU_SHA" != "unknown" ]; then
+            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
+              echo "| **KSUN Commit** | [\`${KSU_SHA:0:8}\`](https://github.com/KernelSU-Next/KernelSU-Next/commit/$KSU_SHA) |"
+            else
+              echo "| **KSU Commit** | [\`${KSU_SHA:0:8}\`](https://github.com/tiann/KernelSU/commit/$KSU_SHA) |"
+            fi
+          else
+            echo "| **KSU Commit** | unknown |"
           fi
           
           if [ "${{ env.OP_SUSFS }}" = true ]; then
@@ -1352,7 +1449,7 @@ runs:
       if: success() && steps.create_zip.conclusion == 'success'
       uses: actions/upload-artifact@v4
       with:
-        name: kernel-${{ env.CONFIG }}_${{ env.OP_OS_VERSION }}
+        name: kernel-${{ inputs.ksu_type }}-${{ env.CONFIG }}_${{ env.OP_OS_VERSION }}
         path: ${{ env.CONFIG }}/artifacts/
         compression-level: 0
         retention-days: 20

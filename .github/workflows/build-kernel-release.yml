@@ -29,11 +29,11 @@ on:
           - android13-5.15
           - android12-5.10
         default: OOS15
-      ksun_branch:
-        description: 'Enter KernelSU Next Branch or commit hash (blank for stable tag)'
+      ksu_options:
+        description: 'Enter KernelSU build json'
         required: true
         type: string
-        default: next
+        default: '[{"type":"ksun","hash":"next"}]'
       optimize_level:
         description: "Compiler optimization level"
         required: true
@@ -87,6 +87,11 @@ jobs:
           echo "::group::Matrix generation"
           
           input="${{ github.event.inputs.op_model }}"
+          ksu_options_raw='${{ github.event.inputs.ksu_options }}'
+          if ! ksu_options_normalized=$(echo "$ksu_options_raw" | jq -c 'map(if .type then .type |= ascii_upcase | if .hash == null then if .type == "KSUN" then .hash = "next" elif .type == "KSU" then .hash = "main" else .hash end else . end else error("No type found") end)' 2>&1); then
+            echo "::error::ksu_options validation failed: $ksu_options_normalized"
+            exit 1
+          fi
           
           echo "[" > matrix.json
           mapfile -t all_json_files < <(find configs/ -name "*.json" -print0 | xargs -0 -n1)
@@ -148,12 +153,17 @@ jobs:
             exit 1
           fi
           
-          wrapped=$(jq -n --argjson items "$filtered" '{ include: $items }')
+          # For each device + each ksu option → one combined entry
+          merged_matrix=$(jq -n --argjson devices "$filtered" --argjson ksu_list "$ksu_options_normalized" '[ $devices[] as $dev | $ksu_list[] as $ksu | ($dev + {ksu_type: $ksu.type, ksu_hash: $ksu.hash}) ]')
           
-          echo "✅ Found $count device(s) to build"
+          final_count=$(echo "$merged_matrix" | jq -s length)
+          
+          wrapped=$(jq -n --argjson items "$merged_matrix" '{ include: $items }')
+          
+          echo "✅ Found $final_count device(s) to build"
           echo ""
           echo "Selected devices:"
-          jq -r '.[] | "  - \(.model) (\(.os_version), \(.android_version)-\(.kernel_version))"' <<<"$filtered"
+          jq -r '.[] | "  - \(.model) (\(.os_version), \(.android_version)-\(.kernel_version), \(.ksu_type) - \(.ksu_hash))"' <<<"$merged_matrix"
           
           echo "matrix=$(jq -c . <<< "$wrapped")" >> "$GITHUB_OUTPUT"
           echo "count=$count" >> "$GITHUB_OUTPUT"
@@ -169,20 +179,49 @@ jobs:
 
       - name: 📊 Build plan summary
         run: |
-          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ksu_options_raw='${{ github.event.inputs.ksu_options }}'
+          ksu_options_normalized=$(echo "$ksu_options_raw" | jq -c 'map(if .type then .type |= ascii_upcase | if .hash == null then if .type == "KSUN" then .hash = "next" elif .type == "KSU" then .hash = "main" else .hash end else . end else error("No type found") end)' 2>&1)
+          
+          # export KSU_OPTIONS="$ksu_options_normalized"
+          
+          # cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # ## 🎯 Build Plan
+          
+          # **Target:** `${{ inputs.op_model }}`  
+          # **Devices:** ${{ steps.set-matrix.outputs.count }}  
+          
+          # **Configuration:**
+          # - KSU Config: `"$KSU_OPTIONS"`
+          # - Optimization: `${{ inputs.optimize_level }}`
+          # - Clean Build/No Ccache: ${{ inputs.clean_build && '✅ Yes' || '❌ No' }}
+          # - Create Release: ${{ inputs.make_release && '✅ Yes' || '❌ No' }}
+          
+          # **SUSFS Configuration:**
+          # EOF
+          
+          {
+            cat << 'EOF'
           ## 🎯 Build Plan
           
-          **Target:** `${{ inputs.op_model }}`  
+          **Target:** ${{ inputs.op_model }}  
           **Devices:** ${{ steps.set-matrix.outputs.count }}  
           
           **Configuration:**
-          - KSU Branch: `${{ inputs.ksun_branch }}`
-          - Optimization: `${{ inputs.optimize_level }}`
+          - KSU Config: `
+          EOF
+          
+            # Inject the shell variable
+            printf '%s' "$ksu_options_normalized"
+          
+            cat << 'EOF'
+          `
+          - Optimization: ${{ inputs.optimize_level }}
           - Clean Build/No Ccache: ${{ inputs.clean_build && '✅ Yes' || '❌ No' }}
           - Create Release: ${{ inputs.make_release && '✅ Yes' || '❌ No' }}
           
           **SUSFS Configuration:**
           EOF
+          } >> "$GITHUB_STEP_SUMMARY"
           
           # Display SUSFS config for each kernel version
           declare -A susfs_inputs=(
@@ -213,14 +252,15 @@ jobs:
           fi
 
   build:
-    name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ matrix.os_version }}, ${{ inputs.ksun_branch }})
+    name: build (${{ matrix.model }}, ${{ matrix.soc }}, ${{ matrix.branch }}, ${{ matrix.manifest }}, ${{ matrix.android_version }}, ${{ matrix.kernel_version }}, ${{ matrix.os_version }}, ${{ matrix.ksu_type }})
     needs: set-op-model
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.set-op-model.outputs.matrix) }}
     outputs:
-      ksun_ver: ${{ steps.build.outputs.ksu_version }}
+      ksun_ver: ${{ steps.build-stat.outputs.ksu_version }}
+      ksu_ver: ${{ steps.build-stat.outputs.ksu_version }}
     steps:
       - name: 🧹 Emergency Disk Cleanup
         run: |
@@ -314,17 +354,25 @@ jobs:
             echo "::endgroup::"
           fi
 
+      - name: 🧹 Prepare op_config_json (without KSU fields)
+        id: prepare_config
+        shell: bash
+        run: |
+          echo "config_json=$(jq -nc --argjson m '${{ toJSON(matrix) }}' '$m | del(.ksu_type, .ksu_hash)')" >> "$GITHUB_OUTPUT"
+
       - name: 🔨 Build Kernel
         id: build
         uses: ./.github/actions
         with:
-          op_config_json: ${{ toJSON(matrix) }}
-          ksun_branch: ${{ inputs.ksun_branch }}
+          op_config_json: ${{ steps.prepare_config.outputs.config_json }}
+          ksu_type: ${{ matrix.ksu_type }}
+          ksu_branch_or_hash: ${{ matrix.ksu_hash }}
           susfs_commit_hash_or_branch: ${{ steps.susfs.outputs.susfs_branch }}
           optimize_level: ${{ inputs.optimize_level }}
           clean: ${{ inputs.clean_build }}
 
       - name: 📊 Build statistics
+        id: build-stat
         if: always()
         run: |
           echo "::group::Build Statistics"
@@ -343,7 +391,15 @@ jobs:
             echo ""
             echo "Outputs:"
             echo "  - Kernel: ${{ steps.build.outputs.kernel_version }}"
-            echo "  - KSU Next: v${{ steps.build.outputs.ksu_version }}"
+            if [ "${{ matrix.ksu_type }}" = "KSUN" ]; then
+              echo "  - KSU Next: v${{ steps.build.outputs.ksu_version }}"
+              echo "ksun_ver=${{ steps.build.outputs.ksu_version }}" >> "$GITHUB_OUTPUT"
+              echo "ksu_ver=" >> "$GITHUB_OUTPUT"
+            else
+              echo "  - KSU: v${{ steps.build.outputs.ksu_version }}"
+              echo "ksun_ver=" >> "$GITHUB_OUTPUT"
+              echo "ksu_ver=${{ steps.build.outputs.ksu_version }}" >> "$GITHUB_OUTPUT"
+            fi
             if [ "${{ matrix.susfs }}" = true ]; then
               echo "  - SUSFS: ${{ steps.build.outputs.susfs_version }}"
             fi
@@ -386,13 +442,22 @@ jobs:
           | Metric | Value |
           |--------|-------|
           | **Kernel** | ${{ steps.build.outputs.kernel_version }} |
+          EOF
+            if [ "${{ matrix.ksu_type }}" = "KSUN" ]; then
+              cat >> $GITHUB_STEP_SUMMARY << EOF
           | **KSU Next** | v${{ steps.build.outputs.ksu_version }} |
           EOF
-          if [ "${{ matrix.susfs }}" = true ]; then
-            cat >> $GITHUB_STEP_SUMMARY << EOF
+            else
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          | **KSU** | v${{ steps.build.outputs.ksu_version }} |
+          EOF
+            fi
+            
+            if [ "${{ matrix.susfs }}" = true ]; then
+              cat >> $GITHUB_STEP_SUMMARY << EOF
           | **SUSFS** | ${{ steps.build.outputs.susfs_version }} |
           EOF
-          fi
+            fi
           cat >> $GITHUB_STEP_SUMMARY << EOF
           | **Build Time** | ${{ steps.build.outputs.build_time }}s |
           EOF
@@ -497,8 +562,16 @@ jobs:
             fi
           done
           
+          ksu_options_raw='${{ github.event.inputs.ksu_options }}'
+          ksu_options_normalized=$(echo "$ksu_options_raw" | jq -c 'map(if .type then .type |= ascii_upcase | if .hash == null then if .type == "KSUN" then .hash = "next" elif .type == "KSU" then .hash = "main" else .hash end else . end else error("No type found") end)' 2>&1)
+          
+          ksun_hash=$(echo "$ksu_options_normalized" | jq -r 'map(select(.type == "KSUN")) | first | .hash // empty')
+          ksu_hash=$(echo "$ksu_options_normalized" | jq -r 'map(select(.type == "KSU")) | first | .hash // empty')
+          
           # Get workflow inputs for reference
-          KSUN_BRANCH="${{ inputs.ksun_branch }}"
+          KSUN_BRANCH="$ksun_hash"
+          KSU_BRANCH="$ksu_hash"
+          
           OPTIMIZE_LEVEL="${{ inputs.optimize_level }}"
           CLEAN_BUILD="${{ inputs.clean_build }}"
           
@@ -568,8 +641,20 @@ jobs:
           
           | Component | Version/Setting |
           |-----------|----------------|
+          EOF
+          if [ -n ${{ needs.build.outputs.ksun_ver }}]; then
+            cat << EOF >> release_notes.md
           | **KernelSU Next Branch** | \`$KSUN_BRANCH\` |
           | **KernelSU Next Version** | \`${{ needs.build.outputs.ksun_ver }}\` |
+          EOF
+          fi
+          if [ -n ${{ needs.build.outputs.ksu_ver }}]; then
+            cat << EOF >> release_notes.md
+          | **KernelSU Branch** | \`$KSU_BRANCH\` |
+          | **KernelSU Version** | \`${{ needs.build.outputs.ksu_ver }}\` |
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           | **SUSFS Version** | \`$SUSFS_BASE_VERSION\` |
           | **Optimization Level** | \`$OPTIMIZE_LEVEL\` |
           | **Clean Build** | $( [ "$CLEAN_BUILD" = "true" ] && echo "✅ Yes (no ccache)" || echo "❌ No (ccache enabled)" ) |
@@ -590,7 +675,18 @@ jobs:
           ## ✨ Features & Capabilities
           
           ### 🔐 Root Management
+          EOF
+          if [ -n ${{ needs.build.outputs.ksun_ver }}]; then
+            cat << EOF >> release_notes.md
           - **KernelSU Next** - Next-generation kernel-level root solution
+          EOF
+          fi
+          if [ -n ${{ needs.build.outputs.ksu_ver }}]; then
+            cat << EOF >> release_notes.md
+          - **KernelSU** - Kernel-level root solution
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           - **SUSFS $SUSFS_BASE_VERSION** - Advanced hiding and security features
           - **Magic Mount Support** - Seamless file system modifications
           - **Manual Hooks** - scope_min_manual_hooks_v1.4 for better compatibility
@@ -626,9 +722,20 @@ jobs:
           ## 📱 Manager Applications
           
           ### Official Manager
+          EOF
+          if [ -n ${{ needs.build.outputs.ksun_ver }}]; then
+            cat << EOF >> release_notes.md
           - **KernelSU Next Manager**  
             → [GitHub Release](https://github.com/KernelSU-Next/KernelSU-Next/releases)
-          
+          EOF
+          fi
+          if [ -n ${{ needs.build.outputs.ksu_ver }}]; then
+            cat << EOF >> release_notes.md
+          - **KernelSU Next Manager**  
+            → [GitHub Release](https://github.com/KernelSU-Next/KernelSU-Next/releases)
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           ### Community Managers
           - **WildKSU Manager** (Recommended for additional features)  
             → [GitHub Release](https://github.com/WildKernels/Wild_KSU/releases)
@@ -679,6 +786,7 @@ jobs:
           ## 🙏 Credits
           
           - **KernelSU Next Team** - Root solution
+          - **KernelSU Team** - Root solution
           - **simonpunk** - SUSFS development
           - **OnePlus** - Kernel source code
           - **Community Contributors** - Testing and feedback
