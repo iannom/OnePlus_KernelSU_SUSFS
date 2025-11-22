@@ -6,6 +6,7 @@
   "android_version": "android15",
   "kernel_version": "6.6",
   "os_version": "OOS16",
+  "disk_cleanup": false,
   "hmbird": true,
   "susfs": true,
   "bbg": true,

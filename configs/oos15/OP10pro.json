@@ -6,6 +6,7 @@
   "android_version": "android12",
   "kernel_version": "5.10",
   "os_version": "OOS15",
+  "disk_cleanup": false,
   "hmbird": false,
   "susfs": true,
   "bbg": true,

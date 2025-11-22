@@ -263,6 +263,7 @@ jobs:
       ksu_ver: ${{ steps.build-stat.outputs.ksu_version }}
     steps:
       - name: 🧹 Emergency Disk Cleanup
+        if: ${{ matrix.disk_cleanup }}
         run: |
           echo "::group::Disk Usage Before Cleanup"
           df -h
