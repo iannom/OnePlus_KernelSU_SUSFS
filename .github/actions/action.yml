@@ -691,15 +691,6 @@ runs:
         fi
         
         case "$susfs_version" in
-          "v1.5.5"|"v1.5.6"|"v1.5.7")
-            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
-              cd ./KernelSU-Next
-              patch -p1 --forward < "../../../kernel_patches/next/0001-kernel-implement-susfs-v1.5.5-v1.5.7-KSUN-v1.0.8.patch" || true
-            else
-              echo "Not Implemented!"
-              exit 1
-            fi
-            ;;
           "v1.5.8")
             if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
               cd ./KernelSU-Next
