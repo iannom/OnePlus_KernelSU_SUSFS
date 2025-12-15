@@ -516,7 +516,7 @@ jobs:
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_NAME: '*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.12 *TEST BUILD*'
-      SUSFS_BASE_VERSION: 'v1.5.12'
+      SUSFS_BASE_VERSION: 'v2.0.0'
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -770,7 +770,7 @@ jobs:
           ## 📜 Changelog
           
           ### This Release
-          - Updated SUSFS to v1.5.12
+          - Updated SUSFS to v2.0.0
           - Added HMBIRD support for all sm8750 devices.
           - Improved ccache build system
           - Enhanced SUSFS hiding capabilities
@@ -796,7 +796,6 @@ jobs:
           
           **⚡ Built with ❤️ by the community**
           
-          > *This is an unofficial build. Use at your own risk.*
           EOF
           
           echo "--- Final Release Notes ---"
