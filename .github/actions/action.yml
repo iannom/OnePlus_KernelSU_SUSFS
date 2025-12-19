@@ -354,7 +354,7 @@ runs:
         RUSTC_FOUND=false
         for base in "$KP/prebuilts" "$KP/prebuilts-master"; do
           [ -d "$base/clang/host/linux-x86" ] || continue
-          latest=$(ls -d "$base"/clang/host/linux-x86/clang-r*/ 2>/dev/null | sort -V | head -n1 || true)
+          latest=$(ls -d "$base"/clang/host/linux-x86/clang-r*/ 2>/dev/null | sort -V | tail -n1 || true)
           if [ -n "$latest" ] && [ -x "$latest/bin/clang" ]; then
             CLANG_BIN="$latest/bin"
             CLANG_FOUND=true
@@ -608,6 +608,7 @@ runs:
         cd "$CONFIG/kernel_platform"
         rm -f common/android/abi_gki_protected_exports_* || true
         rm -f msm-kernel/android/abi_gki_protected_exports_* || true
+        sed -i 's/protected_modules = \[.*\]/protected_modules = []/' common/modules.bzl || true
         df -h
 
     - name: Add BBG
@@ -1046,19 +1047,24 @@ runs:
         sed -i 's/CONFIG_LTO=n/CONFIG_LTO=y/' "./common/arch/arm64/configs/gki_defconfig"
         sed -i 's/CONFIG_LTO_CLANG_FULL=y/CONFIG_LTO_CLANG_NONE=y/' "./common/arch/arm64/configs/gki_defconfig"
         sed -i 's/CONFIG_LTO_CLANG_THIN=y/CONFIG_LTO_CLANG_NONE=y/' "./common/arch/arm64/configs/gki_defconfig"
-        echo "CONFIG_ANDROID_BINDER_IPC_RUST=m" >> ./common/arch/arm64/configs/gki_defconfig
-        echo "CONFIG_LOCALVERSION=\"-OP-Wild\"" >> ./common/arch/arm64/configs/gki_defconfig
+        cat >> ./common/arch/arm64/configs/gki_defconfig <<EOF
+        CONFIG_TCP_CONG_BIC=n
+        CONFIG_TCP_CONG_WESTWOOD=n
+        CONFIG_TCP_CONG_HTCP=n
+        CONFIG_LOCALVERSION="-OP-Wild"
+        CONFIG_ANDROID_BINDER_IPC_RUST=m
+        EOF
         
-        sed -i '/_ARM64_GKI_MODULES_LIST = \[/,/\]/ {
-            /\]/i\
-            "net/ipv4/tcp_bic.ko",\
-            "net/ipv4/tcp_htcp.ko",\
-            "net/ipv4/tcp_westwood.ko",
-        }' ./common/modules.bzl
+        # sed -i '/_ARM64_GKI_MODULES_LIST = \[/,/\]/ {
+            # /\]/i\
+            # "net/ipv4/tcp_bic.ko",\
+            # "net/ipv4/tcp_htcp.ko",\
+            # "net/ipv4/tcp_westwood.ko",
+        # }' ./common/modules.bzl
         
-        sed -i "s/$(printf '\044'){{kernelrelease}}/\"$(printf '\044'){{kernelrelease}}\"/g" ./build/kernel/kleaf/impl/kernel_modules_install.bzl
-        sed -i -e '/_GKI_AARCH64_MAKE_GOALS/,/]/ s/"modules",\?//g' -e '/_GKI_AARCH64_MAKE_GOALS/,/]/ {/^[[:space:]]*$/d}' -e 's/module_implicit_outs = get_gki_modules_list("arm64") + get_kunit_modules_list("arm64")/module_implicit_outs = []/' common/BUILD.bazel
-        sed -i -e 's/":tests_zip_arm64",//' -e '/extra_dist/,/]/ {/^[[:space:]]*$/d}' -e 's/kmi_enforced = True,/kmi_enforced = False,/' -e 's/kmi_symbol_list_strict_mode = True,/kmi_symbol_list_strict_mode = False,/' -e 's/trim_nonlisted_kmi = True,/trim_nonlisted_kmi = False,/' common/BUILD.bazel
+        # sed -i "s/$(printf '\044'){{kernelrelease}}/\"$(printf '\044'){{kernelrelease}}\"/g" ./build/kernel/kleaf/impl/kernel_modules_install.bzl
+        # sed -i -e '/_GKI_AARCH64_MAKE_GOALS/,/]/ s/"modules",\?//g' -e '/_GKI_AARCH64_MAKE_GOALS/,/]/ {/^[[:space:]]*$/d}' -e 's/module_implicit_outs = get_gki_modules_list("arm64") + get_kunit_modules_list("arm64")/module_implicit_outs = []/' common/BUILD.bazel
+        # sed -i -e 's/":tests_zip_arm64",//' -e '/extra_dist/,/]/ {/^[[:space:]]*$/d}' -e 's/kmi_enforced = True,/kmi_enforced = False,/' -e 's/kmi_symbol_list_strict_mode = True,/kmi_symbol_list_strict_mode = False,/' -e 's/trim_nonlisted_kmi = True,/trim_nonlisted_kmi = False,/' common/BUILD.bazel
         
         # Run sed commands for modifications
         sed -i 's/check_defconfig//' ./common/build.config.gki
@@ -1086,8 +1092,6 @@ runs:
         echo "Building the kernel..."
         # Clear Cache
         sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
-        
-        rm ./kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
         
         (stdbuf -oL bash -c '
           while true; do
