@@ -16,9 +16,6 @@
   <project remote="aosp" name="kernel/prebuilts/build-tools" path="kernel_platform/prebuilts/kernel-build-tools" clone-depth="1" groups="ddk">
     <linkfile dest="kernel_platform/build/prebuilts/kernel-build-tools" src="."/>
   </project>
-  <project remote="aosp" name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8" path="kernel_platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8" clone-depth="1" groups="ddk">
-    <linkfile dest="kernel_platform/build/build-tools/sysroot" src="sysroot"/>
-  </project>
   <project remote="aosp" name="platform/prebuilts/clang/host/linux-x86" path="kernel_platform/prebuilts/clang/host/linux-x86" clone-depth="1" groups="ddk" />
   <project remote="aosp" name="platform/prebuilts/rust" path="kernel_platform/prebuilts/rust" clone-depth="1" groups="ddk" />
 </manifest>
