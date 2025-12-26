@@ -1107,18 +1107,6 @@ runs:
         COMMIT_DATE=$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M:%S' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S')
         COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
         
-        KERNEL_BUILD_DATE=$(date -u)
-        export SOURCE_DATE_EPOCH=$COMMIT_TIMESTAMP
-        export KBUILD_BUILD_TIMESTAMP="$KERNEL_BUILD_DATE"
-        export KBUILD_BUILD_USER="${BUILD_USER:-builder}"
-        export KBUILD_BUILD_HOST="${BUILD_HOST:-github-actions}"
-        export KBUILD_BUILD_VERSION=1
-        
-        echo "📅 Build timestamp: $KBUILD_BUILD_TIMESTAMP (from commit $COMMIT_HASH)"
-        echo "🔢 SOURCE_DATE_EPOCH: $SOURCE_DATE_EPOCH"
-        echo "👤 Build user: $KBUILD_BUILD_USER"
-        echo "🖥️  Build host: $KBUILD_BUILD_HOST"
-        
         WORKSPACE="${GITHUB_WORKSPACE}"
         MAP="-fdebug-prefix-map=${WORKSPACE}=."
         MPMAP="-fmacro-prefix-map=${WORKSPACE}=."
@@ -1137,6 +1125,18 @@ runs:
         set +u
         source "$KERNEL_PATH/build/kernel/_setup_env.sh" 2>/dev/null || true
         set -u
+        
+        KERNEL_BUILD_DATE=$(date -u)
+        export SOURCE_DATE_EPOCH=$COMMIT_TIMESTAMP
+        export KBUILD_BUILD_TIMESTAMP="$KERNEL_BUILD_DATE"
+        export KBUILD_BUILD_USER="${BUILD_USER:-kernel}"
+        export KBUILD_BUILD_HOST="${BUILD_HOST:-kleaf}"
+        export KBUILD_BUILD_VERSION=1
+        
+        echo "📅 Build timestamp: $KBUILD_BUILD_TIMESTAMP (from commit $COMMIT_HASH)"
+        echo "🔢 SOURCE_DATE_EPOCH: $SOURCE_DATE_EPOCH"
+        echo "👤 Build user: $KBUILD_BUILD_USER"
+        echo "🖥️  Build host: $KBUILD_BUILD_HOST"
         
         export CC="ccache clang"
         export CXX="ccache clang++"
