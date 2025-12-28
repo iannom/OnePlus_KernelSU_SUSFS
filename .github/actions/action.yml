@@ -904,6 +904,8 @@ runs:
     - name: Apply Other Patches
       shell: bash
       run: |
+        set -euo pipefail
+        echo "::group::Apply Other patches"
         cd "$CONFIG/kernel_platform/common"
         KERNEL_VERSION="${{ env.KERNEL_VER }}"
         MIN_VERSION="5.16"
@@ -952,7 +954,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Add KSU / KSUN and SUSFS Configuration Settings"
+        echo "Add KSU / KSUN and SUSFS Configuration Settings"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_KSU=y
@@ -977,14 +979,13 @@ runs:
         CONFIG_TMPFS_XATTR=y
         CONFIG_TMPFS_POSIX_ACL=y
         EOF
-        echo "::endgroup::"
 
     - name: Add BBR
       if: ${{ env.OP_BBR == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Add BBR"
+        echo "Add BBR"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_TCP_CONG_ADVANCED=y
@@ -992,28 +993,26 @@ runs:
         CONFIG_NET_SCH_FQ=y
         CONFIG_NET_SCH_FQ_CODEL=y
         EOF
-        echo "::endgroup::"
 
     - name: Add TTL Target Support
       if: ${{ env.OP_TTL == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Add TTL Target Support"
+        echo "Add TTL Target Support"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_IP_NF_TARGET_TTL=y
         CONFIG_IP6_NF_TARGET_HL=y
         CONFIG_IP6_NF_MATCH_HL=y
         EOF
-        echo "::endgroup::"
 
     - name: Add IP SET Support
       if: ${{ env.OP_IP_SET == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Add IP SET Support"
+        echo "Add IP SET Support"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_IP_SET=y
@@ -1035,13 +1034,12 @@ runs:
         CONFIG_IP_SET_HASH_NETIFACE=y
         CONFIG_IP_SET_LIST_SET=y
         EOF
-        echo "::endgroup::"
 
     - name: Add Build based configs
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Add Build based configs"
+        echo "Add Build based configs"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y
@@ -1050,27 +1048,25 @@ runs:
         CONFIG_FRAME_WARN=0
         CONFIG_TRACEPOINTS=y
         EOF
-        echo "::endgroup::"
 
     - name: Add RUST build configs
       shell: bash
       if: ${{ env.OP_RUST_BUILD == 'true' }}
       run: |
         set -euo pipefail
-        echo "::group::Add Build based configs"
+        echo "Add Build based configs"
         cd "$CONFIG/kernel_platform"
         cat >> common/arch/arm64/configs/gki_defconfig <<EOF
         CONFIG_ANDROID_BINDER_IPC_RUST=m
         CONFIG_RUST=y
         EOF
-        echo "::endgroup::"
 
     - name: Save Build Metadata
       id: save_metadata
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Save Build Metadata"
+        echo "Save Build Metadata"
         CONFIG_DIR="$GITHUB_WORKSPACE/$CONFIG"
         ARTIFACTS_DIR="$CONFIG_DIR/artifacts"
         cd "$ARTIFACTS_DIR"
@@ -1080,19 +1076,17 @@ runs:
         if [ "${{ env.OP_SUSFS }}" = true ]; then
           echo "susfs_version=${SUSVER:-unknown}" >> "$GITHUB_OUTPUT"
         fi
-        echo "::endgroup::"
 
     - name: Customize Kernel Branding
       shell: bash
       run: |
         set -euo pipefail
-        echo "::group::Customize Kernel Branding"
+        echo "Customize Kernel Branding"
         KERNEL_PATH="$GITHUB_WORKSPACE/$CONFIG/kernel_platform"
         cd "$KERNEL_PATH/common"
         mkdir -p out
         CUSTOM_LOCALVERSION="-${ANDROID_VER}-${OP_UNAME}"
         echo "CUSTOM_LOCALVERSION=$CUSTOM_LOCALVERSION" >> "$GITHUB_ENV"
-        echo "::endgroup::"
 
     - name: Build Kernel
       shell: bash
@@ -1372,6 +1366,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        echo "::group::Collect Build stats"
         KERNEL_PATH="$GITHUB_WORKSPACE/$CONFIG/kernel_platform"
         COMMON="$KERNEL_PATH/common"
         OUT="$COMMON/out"
@@ -1424,6 +1419,7 @@ runs:
         echo "   - Image size: $(numfmt --to=iec-i --suffix=B "$IMG_SIZE")"
         echo "   - SHA256: $IMG_SHA256"
         echo "   - Build time: ${BUILD_TIME}s"
+        echo "::endgroup::"
 
     - name: Create Kernel ZIP
       id: create_zip
