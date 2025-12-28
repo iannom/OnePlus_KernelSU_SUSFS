@@ -97,6 +97,7 @@ runs:
         ip_set="$OP_IP_SET"
         rust_build="$OP_RUST_BUILD"
         lto="$OP_LTO"
+        uname="$OP_UNAME"
         optimize='${{ inputs.optimize_level }}'
         
         errors=()
@@ -201,6 +202,12 @@ runs:
           errors+=("Input 'lto' cannot be empty")
         elif [[ "$lto" != "none" && "$lto" != "thin" && "$lto" != "full" ]]; then
           errors+=("Input 'lto' contains invalid characters. Allowed: 'thin', 'full' or 'none'. Got: '$lto'")
+        fi
+        
+        if [[ -z "$uname" ]]; then
+          errors+=("Input 'uname' cannot be empty")
+        elif [[ ${#uname} -gt 44 ]]; then
+          errors+=("Input 'uname' too long. Maximum length: 44. Got: '$uname'")
         fi
         
         case "$optimize" in
@@ -1083,7 +1090,7 @@ runs:
         KERNEL_PATH="$GITHUB_WORKSPACE/$CONFIG/kernel_platform"
         cd "$KERNEL_PATH/common"
         mkdir -p out
-        CUSTOM_LOCALVERSION="-${ANDROID_VER}-OP-Wild"
+        CUSTOM_LOCALVERSION="-${ANDROID_VER}-${OP_UNAME}"
         echo "CUSTOM_LOCALVERSION=$CUSTOM_LOCALVERSION" >> "$GITHUB_ENV"
         echo "::endgroup::"
 
@@ -1192,8 +1199,9 @@ runs:
         
         make O="$OUT" gki_defconfig
         
-        if [ -n "${CUSTOM_LOCALVERSION:-}" ]; then
-          scripts/config --file "$OUT/.config" --set-str LOCALVERSION "${CUSTOM_LOCALVERSION}"
+        LOCAL_LOCALVERSION="${CUSTOM_LOCALVERSION:--OP-WILD}"
+        if [ -n "${LOCAL_LOCALVERSION:-}" ]; then
+          scripts/config --file "$OUT/.config" --set-str LOCALVERSION "${LOCAL_LOCALVERSION}"
           scripts/config --file "$OUT/.config" -d LOCALVERSION_AUTO || true
           sed -i 's/scm_version="$(scm_version --short)"/scm_version=""/' scripts/setlocalversion
         fi
