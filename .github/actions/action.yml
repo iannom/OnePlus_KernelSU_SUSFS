@@ -660,22 +660,6 @@ runs:
         sed -i 's/protected_modules = \[.*\]/protected_modules = []/' common/modules.bzl || true
         df -h
 
-    - name: Add BBG
-      if: ${{ env.OP_BBG == 'true' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "::group::Add BBG LSM"
-        cd "$CONFIG/kernel_platform"
-        echo "Adding BBG..."
-        if ! wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash; then
-          echo "::warning::BBG setup script failed, continuing anyway"
-        fi
-        echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
-        sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' common/security/Kconfig
-        echo "✅ BBG LSM added"
-        echo "::endgroup::"
-
     - name: Add KernelSU Next
       shell: bash
       if: ${{ inputs.ksu_type == 'KSUN' }}
@@ -908,6 +892,21 @@ runs:
         echo "✅ SUSFS patches applied"
         echo "::endgroup::"
 
+    - name: Add BBG
+      if: ${{ env.OP_BBG == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Add BBG LSM"
+        cd "$CONFIG/kernel_platform"
+        echo "Adding BBG..."
+        if ! wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash; then
+          echo "::warning::BBG setup script failed, continuing anyway"
+        fi
+        echo "CONFIG_BBG=y" >> common/arch/arm64/configs/gki_defconfig
+        sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' common/security/Kconfig
+        echo "✅ BBG LSM added"
+        echo "::endgroup::"
 
     - name: Apply Other Patches
       shell: bash
