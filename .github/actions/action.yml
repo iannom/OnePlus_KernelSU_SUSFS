@@ -812,7 +812,9 @@ runs:
                 echo "Patching file: $file with fix_$file.patch"
                 patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_$file.patch"
               done
+              echo "Patching Hook Mode!"
               patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/overwrite_hook_mode.patch"
+              echo "Patching KSU_TOOLKIT Support for SusFS kernel!"
               patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/ksu_toolkit.patch"
             else
               patch -p1 --forward < 10_enable_susfs_for_ksu.patch
@@ -912,6 +914,7 @@ runs:
           cd ./KernelSU
         fi
         
+        echo "Patching BBG Enhanced Security!"
         patch -p1 --forward < "../../../kernel_patches/common/bbg_untrusted_cred.patch"
         echo "✅ BBG LSM added"
         echo "::endgroup::"
