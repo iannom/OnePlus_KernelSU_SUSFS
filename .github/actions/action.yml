@@ -38,10 +38,10 @@ outputs:
     description: 'Full kernel version string'
     value: ${{ steps.save_metadata.outputs.kernel_version }}
   ksu_version:
-    description: 'KernelSU Next version number'
+    description: 'KernelSU version number'
     value: ${{ steps.save_metadata.outputs.ksu_version }}
   ksu_type:
-    description: 'KernelSU Next version number'
+    description: 'KernelSU Variant'
     value: ${{ steps.save_metadata.outputs.ksu_type }}
   susfs_version:
     description: 'SUSFS version string'
