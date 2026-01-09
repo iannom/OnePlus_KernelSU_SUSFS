@@ -652,6 +652,7 @@ runs:
       run: |
         set -euo pipefail
         echo "::group::Add KernelSU Next"
+        ARTIFACTS_DIR="$GITHUB_WORKSPACE/$CONFIG/artifacts"
         cd "$CONFIG/kernel_platform"
         echo "Adding KernelSU Next..."
         if [ "${{ inputs.ksu_branch_or_hash }}" = "" ]; then
@@ -683,6 +684,8 @@ runs:
         KSU_COMMIT_SHA=$(git rev-parse HEAD)
         echo "KSU_COMMIT_SHA=$KSU_COMMIT_SHA" >> $GITHUB_ENV
         
+        echo "KSUN" >> "${ARTIFACTS_DIR}/${OP_MODEL}_${OP_OS_VERSION}.txt"
+        echo "$KSU_VERSION" >> "${ARTIFACTS_DIR}/${OP_MODEL}_${OP_OS_VERSION}.txt"
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
         echo "KernelSU Next Version: $KSU_VERSION"
         echo "✅ KernelSU Next added (commit: ${KSU_COMMIT_SHA:0:8})"
@@ -694,6 +697,7 @@ runs:
       run: |
         set -euo pipefail
         echo "::group::Add KernelSU"
+        ARTIFACTS_DIR="$GITHUB_WORKSPACE/$CONFIG/artifacts"
         cd "$CONFIG/kernel_platform"
         echo "Adding KernelSU..."
         if [ "${{ inputs.ksu_branch_or_hash }}" = "" ]; then
@@ -713,6 +717,8 @@ runs:
         KSU_COMMIT_SHA=$(git rev-parse HEAD)
         echo "KSU_COMMIT_SHA=$KSU_COMMIT_SHA" >> $GITHUB_ENV
         
+        echo "KSU" >> "${ARTIFACTS_DIR}/${OP_MODEL}_${OP_OS_VERSION}.txt"
+        echo "$KSU_VERSION" >> "${ARTIFACTS_DIR}/${OP_MODEL}_${OP_OS_VERSION}.txt"
         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
         echo "KernelSU Version: $KSU_VERSION"
         echo "✅ KernelSU added (commit: ${KSU_COMMIT_SHA:0:8})"
@@ -724,6 +730,7 @@ runs:
       run: |
         set -euo pipefail
         echo "::group::Apply SUSFS patches"
+        ARTIFACTS_DIR="$GITHUB_WORKSPACE/$CONFIG/artifacts"
         cd "$CONFIG/kernel_platform"
         echo "Applying SUSFS patches..."
         cp ../../susfs4ksu/kernel_patches/50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch ./common/
@@ -732,6 +739,7 @@ runs:
         
         susfs_version=$(grep '#define SUSFS_VERSION' ./common/include/linux/susfs.h | awk -F'"' '{print $2}')
         echo "SUSVER=$susfs_version" >> $GITHUB_ENV
+        echo "$susfs_version" >> "${ARTIFACTS_DIR}/${OP_MODEL}_${OP_OS_VERSION}.txt"
         echo "SusFS Version: $susfs_version"
         
         # Function to compare semantic versions
