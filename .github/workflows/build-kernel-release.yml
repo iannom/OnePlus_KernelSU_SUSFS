@@ -663,15 +663,20 @@ jobs:
           | Component | Version/Setting |
           |-----------|----------------|
           EOF
-          if [ "${{ matrix.ksu_type }}" = "KSUN" ]; then
+          if [ -n "$KSUN_BRANCH" ]; then
             cat << EOF >> release_notes.md
           | **KernelSU Next Branch** | \`$KSUN_BRANCH\` |
           | **KernelSU Next Version** | \`${{ needs.build.outputs.ksu_ver }}\` |
           EOF
-          else
+          elif [ -n "$KSU_BRANCH" ]; then
             cat << EOF >> release_notes.md
           | **KernelSU Branch** | \`$KSU_BRANCH\` |
           | **KernelSU Version** | \`${{ needs.build.outputs.ksu_ver }}\` |
+          EOF
+          else
+            cat << EOF >> release_notes.md
+          | **Unknown KernelSU Fork Branch** | \`\` |
+          | **Unknown KernelSU Fork Version** | \`\` |
           EOF
           fi
           cat << EOF >> release_notes.md
@@ -696,11 +701,11 @@ jobs:
           
           ### 🔐 Root Management
           EOF
-          if [ "${{ matrix.ksu_type }}" = "KSUN" ]; then
+          if [ -n "$KSUN_BRANCH" ]; then
             cat << EOF >> release_notes.md
           - **KernelSU Next** - Next-generation kernel-level root solution
           EOF
-          else
+          elif [ -n "$KSU_BRANCH" ]; then
             cat << EOF >> release_notes.md
           - **KernelSU** - Kernel-level root solution
           EOF
@@ -743,15 +748,15 @@ jobs:
           
           ### Official Manager
           EOF
-          if [ "${{ matrix.ksu_type }}" = "KSUN" ]; then
+          if [ -n "$KSUN_BRANCH" ]; then
             cat << EOF >> release_notes.md
           - **KernelSU Next Manager**  
             → [GitHub Release](https://github.com/KernelSU-Next/KernelSU-Next/releases)
           EOF
-          else
+          elif [ -n "$KSU_BRANCH" ]; then
             cat << EOF >> release_notes.md
-          - **KernelSU Next Manager**  
-            → [GitHub Release](https://github.com/KernelSU-Next/KernelSU-Next/releases)
+          - **KernelSU Manager**  
+            → [GitHub Release](https://github.com/tiann/KernelSU/releases)
           EOF
           fi
           cat << EOF >> release_notes.md
@@ -772,31 +777,32 @@ jobs:
           ## 📥 Installation Instructions
           
           ### Prerequisites
-          - Unlocked bootloader
-          - Backup your current boot image
-          - Have root access using Magisk / KernelSU (Any forks) / Apatch
+          - Unlocked bootloader.
+          - Backup your current boot image.
+          - Have root access using Magisk / KernelSU (Any forks) / Apatch.
           
           ### Via Kernel Flasher
-          1. Download the appropriate ZIP for your device
-          2. Flash the ZIP file using Kernel Flasher
-          3. Reboot system
-          4. Install KernelSU-Next/WildSU Manager
-          5. Install SUSFS module from manager
+          1. Download the appropriate ZIP for your device.
+          2. Flash the ZIP file using Kernel Flasher.
+          3. Reboot system.
+          4. Install KernelSU-Next/WildSU Manager.
+          5. Install SUSFS module from manager.
           
           ---
           
           ## 📜 Changelog
           
           ### This Release
-          - Updated SUSFS to v2.0.0
+          - Updated SUSFS to v2.0.0.
           - Added HMBIRD support for all sm8750 devices.
-          - Improved ccache build system
-          - Enhanced SUSFS hiding capabilities
-          - Added IP_SET and TTL support
-          - Added TMPFS_XATTR and TMPFS_POSIX_ACL support for Mountify
-          - Added Ptrace leak fix for kernels < 5.16
-          - Compiler optimizations (${{ inputs.optimize_level }})
-          - Additional General Optimisations
+          - Improved ccache build system.
+          - Enhanced SUSFS hiding capabilities.
+          - Added IP_SET and TTL support.
+          - Added TMPFS_XATTR and TMPFS_POSIX_ACL support for Mountify.
+          - Added Ptrace leak fix for kernels < 5.16.
+          - Compiler optimizations (${{ inputs.optimize_level }}).
+          - Additional General Optimisations.
+          - Wild_KSU Manager Support.
           
           ### Previous Releases
           See [Releases Page](${{ github.server_url }}/${{ github.repository }}/releases)
