@@ -1014,7 +1014,7 @@ runs:
         set -euo pipefail
         echo "::group::Apply KSU hooks"
         cd "$COMMON_KERNEL_FOLDER"
-        patch -p1 < "$KERNEL_PATCHES_FOLDER/next/scope_min_manual_hooks_v1.4.patch
+        patch -p1 < "$KERNEL_PATCHES_FOLDER/next/scope_min_manual_hooks_v1.4.patch"
         echo "✅ KSU hooks applied"
         echo "::endgroup::"
 
