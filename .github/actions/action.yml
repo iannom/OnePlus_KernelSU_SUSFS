@@ -1022,16 +1022,8 @@ runs:
         
         if [ "$(printf '%s\n' "$KERNEL_VERSION" "$MIN_VERSION" | sort -V | head -n1)" = "$KERNEL_VERSION" ]; then
           patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/clear_page_16bytes_align.patch"
-          if [ "$OP_UNICODE" = true ]; then
-            echo "Patching unicode!"
-            patch -p1 --forward < "../../../kernel_patches/common/unicode_bypass_fix_6.1-.patch"
-          fi
         else
           cat "$KERNEL_PATCHES_FOLDER/common/clear_page_16bytes_align.patch" | sed -e 's/SYM_FUNC_START_PI(clear_page)/SYM_FUNC_START_PI(__pi_clear_page)/' | patch -p1 -F3 --forward
-          if [ "$OP_UNICODE" = true ]; then
-            echo "Patching unicode!"
-            patch -p1 --forward < "../../../kernel_patches/common/unicode_bypass_fix_6.1+.patch"
-          fi
         fi
         
         
@@ -1063,6 +1055,23 @@ runs:
         
         echo "✅ Other patches applied"
         echo "::endgroup::"
+
+    - name: Apply Unicode Fix Patch
+      shell: bash
+      if: ${{ env.OP_UNICODE == 'true' }}
+      run: |
+        set -euo pipefail
+        echo "::group::Apply Unicode Fix patch"
+        cd "$COMMON_KERNEL_FOLDER"
+        KERNEL_VERSION="${{ env.KERNEL_VER }}"
+        MIN_VERSION="5.16"
+        
+        echo "Patching unicode!"
+        if [ "$(printf '%s\n' "$KERNEL_VERSION" "$MIN_VERSION" | sort -V | head -n1)" = "$KERNEL_VERSION" ]; then
+            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/unicode_bypass_fix_6.1-.patch"
+        else
+            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/unicode_bypass_fix_6.1+.patch"
+        fi
 
     - name: Apply KSU Hooks
       shell: bash
