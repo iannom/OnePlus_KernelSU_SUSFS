@@ -98,6 +98,7 @@ runs:
         rust_build="$OP_RUST_BUILD"
         lto="$OP_LTO"
         uname="$OP_UNAME"
+        unicode="$OP_UNICODE"
         optimize='${{ inputs.optimize_level }}'
         
         errors=()
@@ -208,6 +209,12 @@ runs:
           errors+=("Input 'uname' cannot be empty")
         elif [[ ${#uname} -gt 44 ]]; then
           errors+=("Input 'uname' too long. Maximum length: 44. Got: '$uname'")
+        fi
+        
+        if [[ -z "$unicode" ]]; then
+          errors+=("Input 'unicode' cannot be empty")
+        elif [[ "$unicode" != "true" && "$unicode" != "false" ]]; then
+          errors+=("Input 'unicode' contains invalid characters. Allowed: 'true' or 'false'. Got: '$unicode'")
         fi
         
         case "$optimize" in
@@ -1015,8 +1022,16 @@ runs:
         
         if [ "$(printf '%s\n' "$KERNEL_VERSION" "$MIN_VERSION" | sort -V | head -n1)" = "$KERNEL_VERSION" ]; then
           patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/clear_page_16bytes_align.patch"
+          if [ "$OP_UNICODE" = true ]; then
+            echo "Patching unicode!"
+            patch -p1 --forward < "../../../kernel_patches/common/unicode_bypass_fix_6.1-.patch"
+          fi
         else
           cat "$KERNEL_PATCHES_FOLDER/common/clear_page_16bytes_align.patch" | sed -e 's/SYM_FUNC_START_PI(clear_page)/SYM_FUNC_START_PI(__pi_clear_page)/' | patch -p1 -F3 --forward
+          if [ "$OP_UNICODE" = true ]; then
+            echo "Patching unicode!"
+            patch -p1 --forward < "../../../kernel_patches/common/unicode_bypass_fix_6.1+.patch"
+          fi
         fi
         
         
