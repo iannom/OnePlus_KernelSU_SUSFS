@@ -62,6 +62,19 @@ jobs:
           restore-keys: |
             ${{ env.CACHE_KEY }}
 
+      - name: Prepare Persistence from Status Branch
+        run: |
+          git clone --branch status-page https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} status_repo || mkdir status_repo
+          cd status_repo
+          if [ -f "$STATE_FILE" ]; then
+            cp "$STATE_FILE" ../main/
+            echo "✅ Existing state loaded from status-page branch."
+          else
+            echo "{}" > ../main/"$STATE_FILE"
+            echo "init" > .gitignore # Ensure we can track files if orphan
+            echo "ℹ️ No existing state found. Starting fresh."
+          fi
+
       - name: Process Repositories
         id: scanner
         run: |
@@ -267,8 +280,8 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} status_repo
-          cd status_repo
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} status_repo_final
+          cd status_repo_final
           if git ls-remote --exit-code --heads origin status-page; then
             git fetch origin status-page && git checkout status-page
           else
@@ -278,7 +291,10 @@ jobs:
           echo "> **Last Update:** $(date -u) (UTC)" >> README.md
           echo "Daily automated report for OnePlus Kernel branches." >> README.md
           cat ../local_summary.md >> README.md
-          git add README.md
+          
+          cp "../main/${{ env.STATE_FILE }}" .
+          git add README.md "${{ env.STATE_FILE }}"
+          
           git diff --staged --quiet || (git commit -m "docs: sync kernel status [skip ci]" && git push origin status-page)
 
       - name: Delete Old Cache
