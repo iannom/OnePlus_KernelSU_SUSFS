@@ -1368,7 +1368,10 @@ runs:
         set -euo pipefail
         echo "Add Build based configs"
         cat >> "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig" <<EOF
-        CONFIG_ANDROID_BINDER_IPC_RUST=m
+        CONFIG_ANDROID_BINDER_IPC_RUST=y
+        CONFIG_CMDLINE="module_blacklist=rust_binder"
+        CONFIG_CMDLINE_EXTEND=y
+        CONFIG_CMDLINE_FORCE=n
         CONFIG_RUST=y
         EOF
 
