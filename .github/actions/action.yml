@@ -1,4 +1,4 @@
-name: 'Build OnePlus Kernel with KernelSU Next'
+name: 'Build OnePlus OP13T Kernel with KernelSU Next'
 
 inputs:
   op_config_json:
@@ -6,14 +6,13 @@ inputs:
     required: true
     type: string
   ksu_type:
-    description: 'Select KSU Type'
+    description: 'Only KSUN is supported'
     required: true
     type: choice
     options:
       - KSUN
-      - KSU
   ksu_branch_or_hash:
-    description: 'KSU branch or commit hash (empty = auto-detect by ksu_type)'
+    description: 'KernelSU-Next branch or commit hash'
     required: false
     type: string
     default: ""
@@ -116,6 +115,7 @@ runs:
         ds="$OP_DS"
         ntsync="$OP_NTSYNC"
         optimize='${{ inputs.optimize_level }}'
+        ksu_type='${{ inputs.ksu_type }}'
         
         errors=()
         
@@ -171,6 +171,43 @@ runs:
           errors+=("Input 'os_version' cannot be empty")
         elif [[ ! "$os_version" =~ ^OOS ]]; then
           errors+=("Input 'os_version' does not start with 'OOS'. Got: '$os_version'")
+        fi
+
+        if [[ "$model" != "OP13T" ]]; then
+          errors+=("Only OP13T is supported. Got: '$model'")
+        fi
+
+        if [[ "$soc" != "sun" ]]; then
+          errors+=("Only soc 'sun' is supported. Got: '$soc'")
+        fi
+
+        if [[ "$branch" != "wild/sm8750" ]]; then
+          errors+=("Only branch 'wild/sm8750' is supported. Got: '$branch'")
+        fi
+
+        if [[ "$android_version" != "android15" ]]; then
+          errors+=("Only android15 is supported. Got: '$android_version'")
+        fi
+
+        if [[ "$kernel_version" != "6.6" ]]; then
+          errors+=("Only kernel 6.6 is supported. Got: '$kernel_version'")
+        fi
+
+        case "$os_version" in
+          OOS15)
+            expected_manifest="oneplus_13t_v.xml"
+            ;;
+          OOS16)
+            expected_manifest="oneplus_13t_w.xml"
+            ;;
+          *)
+            expected_manifest=""
+            errors+=("Only OOS15/OOS16 are supported. Got: '$os_version'")
+            ;;
+        esac
+
+        if [[ -n "${expected_manifest:-}" && "$manifest" != "$expected_manifest" ]]; then
+          errors+=("Manifest '$manifest' does not match $os_version. Expected: '$expected_manifest'")
         fi
         
         if [[ -z "$hmbird" ]]; then
@@ -250,6 +287,10 @@ runs:
         elif [[ "$ntsync" != "true" && "$ntsync" != "false" ]]; then
           errors+=("Input 'ntsync' contains invalid characters. Allowed: 'true' or 'false'. Got: '$ntsync'")
         fi
+
+        if [[ "$ksu_type" != "KSUN" ]]; then
+          errors+=("Only KSUN is supported. Got: '$ksu_type'")
+        fi
         
         case "$optimize" in
           O2|O3) ;;
@@ -319,17 +360,15 @@ runs:
         cd "$CONFIG"
         echo "Initializing and syncing kernel source..."
         
-        if [[ "$OP_MANIFEST" == https://* ]]; then
-          mkdir -p .repo/manifests
-          curl --fail --show-error --location --proto '=https' "$OP_MANIFEST" -o .repo/manifests/temp_manifest.xml
-          "$REPO" init -u https://github.com/OnePlusOSS/kernel_manifest.git -b "oneplus/sm8650" -m temp_manifest.xml --repo-rev=v2.16 --depth=1 --no-clone-bundle --no-tags
-        elif [[ "$OP_BRANCH" == wild/* ]]; then
-          mkdir -p .repo/manifests
-          cp "../manifests/$(echo "$OP_OS_VERSION" | tr '[:upper:]' '[:lower:]')/$OP_MANIFEST" .repo/manifests/temp_manifest.xml
-          "$REPO" init -u https://github.com/OnePlusOSS/kernel_manifest.git -b "oneplus/sm8650" -m temp_manifest.xml --repo-rev=v2.16 --depth=1 --no-clone-bundle --no-tags
-        else
-          "$REPO" init -u https://github.com/OnePlusOSS/kernel_manifest.git -b "$OP_BRANCH" -m "$OP_MANIFEST" --repo-rev=v2.16 --depth=1 --no-clone-bundle --no-tags
+        MANIFEST_SRC="../manifests/$(echo "$OP_OS_VERSION" | tr '[:upper:]' '[:lower:]')/$OP_MANIFEST"
+        if [ ! -f "$MANIFEST_SRC" ]; then
+          echo "::error::Manifest not found: $MANIFEST_SRC"
+          exit 1
         fi
+
+        mkdir -p .repo/manifests
+        cp "$MANIFEST_SRC" .repo/manifests/temp_manifest.xml
+        "$REPO" init -u https://github.com/OnePlusOSS/kernel_manifest.git -b "oneplus/sm8650" -m temp_manifest.xml --repo-rev=v2.16 --depth=1 --no-clone-bundle --no-tags
         
         "$REPO" --version
         success=false
@@ -358,7 +397,6 @@ runs:
         AK3_DIR="$GITHUB_WORKSPACE/AnyKernel3"
         KERNEL_PATCHES_DIR="$GITHUB_WORKSPACE/kernel_patches"
         SUSFS_DIR="$GITHUB_WORKSPACE/susfs4ksu"
-        KSU_DIR="$KERNEL_PLATFORM_DIR/KernelSU"
         KSUN_DIR="$KERNEL_PLATFORM_DIR/KernelSU-Next"
         mkdir -p "$ARTIFACTS_DIR"
         
@@ -371,7 +409,6 @@ runs:
         echo "AK3_FOLDER=$AK3_DIR" >> "$GITHUB_ENV"
         echo "KERNEL_PATCHES_FOLDER=$KERNEL_PATCHES_DIR" >> "$GITHUB_ENV"
         echo "SUSFS_FOLDER=$SUSFS_DIR" >> "$GITHUB_ENV"
-        echo "KSU_FOLDER=$KSU_DIR" >> "$GITHUB_ENV"
         echo "KSUN_FOLDER=$KSUN_DIR" >> "$GITHUB_ENV"
 
     - name: Get Kernel Version Info
@@ -713,26 +750,11 @@ runs:
         ANYKERNEL_BRANCH="gki-2.0"
         
         if [ "${{ env.OP_SUSFS }}" = true ]; then
-          # Determine SUSFS branch/commit to use
           SUSFS_INPUT="${{ inputs.susfs_commit_hash_or_branch }}"
-          
-          # Default SUSFS branches for each kernel version
-          declare -A DEFAULT_SUSFS=(
-            ["android12-5.10"]="gki-android12-5.10"
-            ["android13-5.15"]="gki-android13-5.15"
-            ["android14-6.1"]="gki-android14-6.1"
-            ["android15-6.6"]="gki-android15-6.6"
-            ["android16-6.12"]="gki-android16-6.12"
-          )
-          
-          # Determine which SUSFS ref to use
-          KERNEL_KEY="${{ env.ANDROID_VER }}-${{ env.KERNEL_VER }}"
           if [ -z "$SUSFS_INPUT" ]; then
-            # use kernel-specific default
-            SUSFS_BRANCH="${DEFAULT_SUSFS[$KERNEL_KEY]:-gki-android15-6.6}"
-            echo "ℹ️  Using default SUSFS branch for $KERNEL_KEY: $SUSFS_BRANCH"
+            SUSFS_BRANCH="gki-android15-6.6"
+            echo "ℹ️  Using default SUSFS branch for android15-6.6: $SUSFS_BRANCH"
           else
-            # 40-char hash or branch/commit passed directly
             SUSFS_BRANCH="$SUSFS_INPUT"
             echo "🔧 Using resolved SUSFS ref: $SUSFS_BRANCH"
           fi
@@ -828,7 +850,6 @@ runs:
 
     - name: Add KernelSU Next
       shell: bash
-      if: ${{ inputs.ksu_type == 'KSUN' }}
       run: |
         set -euo pipefail
         echo "::group::Add KernelSU Next"
@@ -888,48 +909,6 @@ runs:
         echo "✅ KernelSU Next added (commit: ${KSU_COMMIT_SHA:0:8})"
         echo "::endgroup::"
 
-    - name: Add KernelSU
-      shell: bash
-      if: ${{ inputs.ksu_type == 'KSU' }}
-      run: |
-        set -euo pipefail
-        echo "::group::Add KernelSU"
-        cd "$KERNEL_PLATFORM_FOLDER"
-        echo "Adding KernelSU..."
-        KSU_INPUT="${{ inputs.ksu_branch_or_hash }}"
-        if [ -z "$KSU_INPUT" ]; then
-          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-        else
-          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s "$KSU_INPUT"
-        fi
-        git submodule update --init --recursive
-        cd KernelSU/kernel
-        BASE_VERSION=20000
-        KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" $BASE_VERSION)
-        sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" Makefile
-        
-        if [ -f ksu.c ]; then
-          sed -i 's/#if defined(CONFIG_STACKPROTECTOR) && (defined(CONFIG_ARM64) && !defined(CONFIG_STACKPROTECTOR_PER_TASK))/#if 0/' ksu.c
-        fi
-        
-        echo "NEED_HOOKS=false" >> $GITHUB_ENV
-        
-        cd ..
-        KSU_COMMIT_SHA=$(git rev-parse HEAD)
-        echo "KSU_COMMIT_SHA=$KSU_COMMIT_SHA" >> $GITHUB_ENV
-        
-        echo "Add KSU Configuration Settings"
-        cat >> "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig" <<EOF
-        CONFIG_KSU=y
-        EOF
-        
-        echo "KSU" >> "${ARTIFACTS_FOLDER}/${OP_MODEL}_${OP_OS_VERSION}.txt"
-        echo "$KSU_VERSION" >> "${ARTIFACTS_FOLDER}/${OP_MODEL}_${OP_OS_VERSION}.txt"
-        echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-        echo "KernelSU Version: $KSU_VERSION"
-        echo "✅ KernelSU added (commit: ${KSU_COMMIT_SHA:0:8})"
-        echo "::endgroup::"
-
     - name: Apply SUSFS Patches
       shell: bash
       if: ${{ env.OP_SUSFS == 'true' }}
@@ -959,77 +938,57 @@ runs:
         
         case "$susfs_version" in
           "v1.5.8")
-            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
-              patch -p1 --forward --fuzz=3 < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
-              patch -p1 --forward --fuzz=3 < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_apk_sign.c.patch"
-              patch -p1 --forward --fuzz=3 < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_core_hook.c.patch"
-              patch -p1 --forward --fuzz=3 < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_selinux.c.patch"
-              patch -p1 --forward --fuzz=3 < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch"
-            else
-              cd "$KSU_FOLDER"
-              patch -p1 --forward --fuzz=3 < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
-            fi
+            patch -p1 --forward --fuzz=3 < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+            patch -p1 --forward --fuzz=3 < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_apk_sign.c.patch"
+            patch -p1 --forward --fuzz=3 < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_core_hook.c.patch"
+            patch -p1 --forward --fuzz=3 < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_selinux.c.patch"
+            patch -p1 --forward --fuzz=3 < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch"
             ;;
           "v1.5.9"|"v1.5.10"|"v1.5.11"|"v1.5.12")
-            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
-              cd "$KSUN_FOLDER"
-              patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
-              for file in $(find ./kernel -maxdepth 2 -name "*.rej" -printf "%f\n" | cut -d'.' -f1); do
-                echo "Patching file: $file.c with fix_$file.c.patch"
-                patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_$file.c.patch"
-              done
-              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_kernel_compat.c.patch"
-            else
-              cd "$KSU_FOLDER"
-              patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
-            fi
+            cd "$KSUN_FOLDER"
+            patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+            for file in $(find ./kernel -maxdepth 2 -name "*.rej" -printf "%f\n" | cut -d'.' -f1); do
+              echo "Patching file: $file.c with fix_$file.c.patch"
+              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_$file.c.patch"
+            done
+            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_kernel_compat.c.patch"
             ;;
           "v2.0.0")
-            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
-              cd "$KSUN_FOLDER"
-              patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
-              for file in $(find ./kernel -maxdepth 2 -name "*.rej" -exec basename {} .rej \;); do
-                echo "Patching file: $file with fix_$file.patch"
-                patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_$file.patch"
-              done
-              echo "Patching Hook Mode!"
-              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/overwrite_hook_mode.patch"
-              echo "Patching KSU_TOOLKIT Support for SusFS kernel!"
-              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/ksu_toolkit.patch"
-              echo "Patching Multi-manager Support for SusFS kernel!"
-              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/multi_manager.patch"
-              if [ "$KSUVER" -ge 33068 ] && [ "$KSUVER" -lt 33070 ]; then
-                echo "Patching Multi-manager sepolicy Support for SusFS kernel!"
-                patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/multi_sepolicy_fix.patch"
-              fi
-            else
-              cd "$KSU_FOLDER"
-              patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+            cd "$KSUN_FOLDER"
+            patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+            for file in $(find ./kernel -maxdepth 2 -name "*.rej" -exec basename {} .rej \;); do
+              echo "Patching file: $file with fix_$file.patch"
+              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_$file.patch"
+            done
+            echo "Patching Hook Mode!"
+            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/overwrite_hook_mode.patch"
+            echo "Patching KSU_TOOLKIT Support for SusFS kernel!"
+            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/ksu_toolkit.patch"
+            echo "Patching Multi-manager Support for SusFS kernel!"
+            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/multi_manager.patch"
+            if [ "$KSUVER" -ge 33068 ] && [ "$KSUVER" -lt 33070 ]; then
+              echo "Patching Multi-manager sepolicy Support for SusFS kernel!"
+              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/multi_sepolicy_fix.patch"
             fi
             ;;
           "v2.1.0")
-            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
-              cd "$KSUN_FOLDER"
-              patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
-              for file in $(find ./kernel -maxdepth 2 -name "*.rej" -exec basename {} .rej \;); do
-                echo "Patching file: $file with fix_$file.patch"
-                patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_$file.patch"
-              done
-              echo "Patching Hook Mode!"
-              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/overwrite_hook_mode.patch"
-              echo "Patching KSU_TOOLKIT Support for SusFS kernel!"
-              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/ksu_toolkit.patch"
-              if [ "$KSUVER" -le 33095 ]; then
-              echo "Patching Multi-manager Support for SusFS kernel!"
-              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/multi_manager.patch"
-              fi
-              if [ "$KSUVER" -ge 33068 ] && [ "$KSUVER" -lt 33070 ]; then
-                echo "Patching Multi-manager sepolicy Support for SusFS kernel!"
-                patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/multi_sepolicy_fix.patch"
-              fi
-            else
-              cd "$KSU_FOLDER"
-              patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+            cd "$KSUN_FOLDER"
+            patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+            for file in $(find ./kernel -maxdepth 2 -name "*.rej" -exec basename {} .rej \;); do
+              echo "Patching file: $file with fix_$file.patch"
+              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/fix_$file.patch"
+            done
+            echo "Patching Hook Mode!"
+            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/overwrite_hook_mode.patch"
+            echo "Patching KSU_TOOLKIT Support for SusFS kernel!"
+            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/ksu_toolkit.patch"
+            if [ "$KSUVER" -le 33095 ]; then
+            echo "Patching Multi-manager Support for SusFS kernel!"
+            patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/multi_manager.patch"
+            fi
+            if [ "$KSUVER" -ge 33068 ] && [ "$KSUVER" -lt 33070 ]; then
+              echo "Patching Multi-manager sepolicy Support for SusFS kernel!"
+              patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/next/susfs_fix_patches/$susfs_version/multi_sepolicy_fix.patch"
             fi
             ;;
           *)
@@ -1039,78 +998,29 @@ runs:
         esac
         
         cd "$COMMON_KERNEL_FOLDER"
-        if [ "${{ env.ANDROID_VER }}" = "android15" ] && [ "${{ env.KERNEL_VER }}" = "6.6" ]; then
-          if ! grep -qxF '#include <trace/hooks/fs.h>' ./fs/namespace.c; then
-            sed -i '/#include <trace\/hooks\/blk.h>/a #include <trace\/hooks\/fs.h>' ./fs/namespace.c
-          fi
+        if ! grep -qxF '#include <trace/hooks/fs.h>' ./fs/namespace.c; then
+          sed -i '/#include <trace\/hooks\/blk.h>/a #include <trace\/hooks\/fs.h>' ./fs/namespace.c
         fi
-        
-        # Fake kernel patch to fix failures
+
         fake_patched=0
-        if [ "${{ env.ANDROID_VER }}" = "android15" ] && [ "${{ env.KERNEL_VER }}" = "6.6" ]; then
-          if ! grep -qxF $'\tunsigned int nr_subpages = __PAGE_SIZE / PAGE_SIZE;' ./fs/proc/task_mmu.c; then
-            echo "nr_subpages Line not found. Fake Patching!"
-            sed -i -e '/int ret = 0, copied = 0;/a \\tunsigned int nr_subpages \= __PAGE_SIZE \/ PAGE_SIZE;' -e '/int ret = 0, copied = 0;/a \\tpagemap_entry_t \*res = NULL;' ./fs/proc/task_mmu.c
-            fake_patched=1
-          fi
-          
-          if ! grep -qxF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
-            echo "#include <linux/dma-buf.h> Line not found. Adding missing header"
-            sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
-          fi
+        if ! grep -qxF $'\tunsigned int nr_subpages = __PAGE_SIZE / PAGE_SIZE;' ./fs/proc/task_mmu.c; then
+          echo "nr_subpages Line not found. Fake Patching!"
+          sed -i -e '/int ret = 0, copied = 0;/a \\tunsigned int nr_subpages \= __PAGE_SIZE \/ PAGE_SIZE;' -e '/int ret = 0, copied = 0;/a \\tpagemap_entry_t \*res = NULL;' ./fs/proc/task_mmu.c
+          fake_patched=1
         fi
-        if [ "${{ env.ANDROID_VER }}" = "android12" ] && [ "${{ env.KERNEL_VER }}" = "5.10" ]; then
-          if ! grep -qxF $'\tif (!vma_pages(vma))' ./fs/proc/task_mmu.c; then
-            echo "vma_pages Line not found. Fake Patching!"
-            fake_patched=1
-          fi
-        fi
-        if [ "${{ env.ANDROID_VER }}" = "android13" ] && [ "${{ env.KERNEL_VER }}" = "5.15" ]; then
-          if ! grep -qxF $'\tif (!vma_pages(vma))' ./fs/proc/task_mmu.c; then
-            echo "vma_pages Line not found. Fake Patching!"
-            fake_patched=1
-          fi
-        fi
-        
-        if [ "${{ env.ANDROID_VER }}" = "android14" ] && [ "${{ env.KERNEL_VER }}" = "6.1" ]; then
-          if ! grep -qxF $'\tif (!vma_pages(vma))' ./fs/proc/task_mmu.c; then
-            echo "vma_pages Line not found. Fake Patching!"
-            fake_patched=1
-          fi
-          
-          if ! grep -qxF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
-            echo "#include <linux/dma-buf.h> Line not found. Adding missing header"
-            sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
-          fi
+
+        if ! grep -qxF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
+          echo "#include <linux/dma-buf.h> Line not found. Adding missing header"
+          sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
         fi
         
         patch -p1 --forward < "$SUSFS_FOLDER/kernel_patches/50_add_susfs_in_${{ env.SUSFS_KERNEL_BRANCH }}.patch"
         
         # Revert Fake kernel patch
         if [ "$fake_patched" = 1 ]; then
-          if [ "${{ env.ANDROID_VER }}" = "android15" ] && [ "${{ env.KERNEL_VER }}" = "6.6" ]; then
-            if grep -qxF $'\tunsigned int nr_subpages = __PAGE_SIZE / PAGE_SIZE;' ./fs/proc/task_mmu.c; then
-              echo "nr_subpages Line found. Revert Fake Patching!"
-              sed -i -e '/unsigned int nr_subpages \= __PAGE_SIZE \/ PAGE_SIZE;/d' -e '/pagemap_entry_t \*res = NULL;/d' ./fs/proc/task_mmu.c
-            fi
-          fi
-          if [ "${{ env.ANDROID_VER }}" = "android12" ] && [ "${{ env.KERNEL_VER }}" = "5.10" ]; then
-            if grep -qxF $'\t\t\tgoto show_pad;' ./fs/proc/task_mmu.c; then
-              echo "vma_pages Line found. Revert Fake Patching!"
-              sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-            fi
-          fi
-          if [ "${{ env.ANDROID_VER }}" = "android13" ] && [ "${{ env.KERNEL_VER }}" = "5.15" ]; then
-            if grep -qxF $'\t\t\tgoto show_pad;' ./fs/proc/task_mmu.c; then
-              echo "vma_pages Line found. Revert Fake Patching!"
-              sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-            fi
-          fi
-          if [ "${{ env.ANDROID_VER }}" = "android14" ] && [ "${{ env.KERNEL_VER }}" = "6.1" ]; then
-            if grep -qxF $'\t\t\tgoto show_pad;' ./fs/proc/task_mmu.c; then
-              echo "vma_pages Line found. Revert Fake Patching!"
-              sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-            fi
+          if grep -qxF $'\tunsigned int nr_subpages = __PAGE_SIZE / PAGE_SIZE;' ./fs/proc/task_mmu.c; then
+            echo "nr_subpages Line found. Revert Fake Patching!"
+            sed -i -e '/unsigned int nr_subpages \= __PAGE_SIZE \/ PAGE_SIZE;/d' -e '/pagemap_entry_t \*res = NULL;/d' ./fs/proc/task_mmu.c
           fi
         fi
         echo "✅ SUSFS patches applied"
@@ -1257,31 +1167,17 @@ runs:
         echo "::group::Apply NTSync patch"
         cd "$COMMON_KERNEL_FOLDER"
         NTSYNC_FOLDER="$KERNEL_PATCHES_FOLDER/common/ntsync"
-        GKI_KEY="${ANDROID_VER}-${KERNEL_VER}"
-        BRANCH_SUFFIX=$(basename "$OP_BRANCH")
-        
-        if [[ "$OP_MODEL" == "OP10r" || "$OP_MODEL" == "OP-ACE-RACE" ]] && [[ "$OP_OS_VERSION" == "OOS15" ]]; then
-          NTSYNC_PATCH="$NTSYNC_FOLDER/ntsync_compat_android12-5.10_OOS14.patch"
-          if [ ! -f "$NTSYNC_PATCH" ]; then
-            echo "::error::NTSync compat patch not found for ${OP_MODEL}: $(basename $NTSYNC_PATCH)"
-            exit 1
-          fi
-        elif [ -f "$NTSYNC_FOLDER/ntsync_compat_${GKI_KEY}_${OP_OS_VERSION}.patch" ]; then
-          NTSYNC_PATCH="$NTSYNC_FOLDER/ntsync_compat_${GKI_KEY}_${OP_OS_VERSION}.patch"
-        elif [ -f "$NTSYNC_FOLDER/ntsync_compat_${GKI_KEY}.patch" ]; then
-          NTSYNC_PATCH="$NTSYNC_FOLDER/ntsync_compat_${GKI_KEY}.patch"
+
+        if [ -f "$NTSYNC_FOLDER/ntsync_compat_android15-6.6_${OP_OS_VERSION}.patch" ]; then
+          NTSYNC_PATCH="$NTSYNC_FOLDER/ntsync_compat_android15-6.6_${OP_OS_VERSION}.patch"
+        elif [ -f "$NTSYNC_FOLDER/ntsync_compat_android15-6.6.patch" ]; then
+          NTSYNC_PATCH="$NTSYNC_FOLDER/ntsync_compat_android15-6.6.patch"
         else
-          echo "::error::NTSync patch not found for ${GKI_KEY} (Model: ${OP_MODEL}, OOS: ${OP_OS_VERSION})"
+          echo "::error::NTSync patch not found for android15-6.6 (OOS: ${OP_OS_VERSION})"
           exit 1
         fi
         
         echo "Using patch: $(basename $NTSYNC_PATCH)"
-        if [ "$ANDROID_VER" = "android16" ] && [ "$KERNEL_VER" = "6.12" ]; then
-          echo "Removing pre-existing ntsync files for android16-6.12"
-          rm -f include/uapi/linux/ntsync.h
-          rm -f drivers/misc/ntsync.c
-        fi
-        
         echo "Patching $(basename $NTSYNC_PATCH)!"
         patch -p1 --forward < "$NTSYNC_PATCH"
         echo "Patching ntsync_base!"
@@ -1454,7 +1350,7 @@ runs:
         cd "$ARTIFACTS_FOLDER"
         echo "kernel_version=${{ env.KERNEL_FULL_VER }}" >> "$GITHUB_OUTPUT"
         echo "ksu_version=${KSUVER:-unknown}" >> "$GITHUB_OUTPUT"
-        echo "ksu_type=${{ inputs.ksu_type }}" >> "$GITHUB_OUTPUT"
+        echo "ksu_type=KSUN" >> "$GITHUB_OUTPUT"
         echo "build_timestamp=${EFFECTIVE_BUILD_TIMESTAMP:-unknown}" >> "$GITHUB_OUTPUT"
         if [ "${{ env.OP_SUSFS }}" = true ]; then
           echo "susfs_version=${SUSVER:-unknown}" >> "$GITHUB_OUTPUT"
@@ -1603,11 +1499,7 @@ runs:
           KCFLAGS_EXTRA="-O2"
         fi
         
-        case "$OP_BRANCH" in
-          wild/sm8750|wild/sm8850|wild/sm8845)
-            KCFLAGS_EXTRA="-mcpu=oryon-1 ${KCFLAGS_EXTRA}"
-            ;;
-        esac
+        KCFLAGS_EXTRA="-mcpu=oryon-1 ${KCFLAGS_EXTRA}"
         
         case "${{ env.OP_LTO}}" in
           "none")
@@ -1857,9 +1749,9 @@ runs:
         sed -i 's/do.check_boot_version=.*/do.check_boot_version=1/' anykernel.sh
         
         if [ "${{ env.OP_SUSFS }}" = true ]; then
-          ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_${{ inputs.ksu_type }}_${KSUVER:-unknown}_SuSFS_${SUSVER:-unknown}.zip"
+          ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_KSUN_${KSUVER:-unknown}_SuSFS_${SUSVER:-unknown}.zip"
         else
-          ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_${{ inputs.ksu_type }}_${KSUVER:-unknown}.zip"
+          ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_KSUN_${KSUVER:-unknown}.zip"
         fi
         mkdir -p "$ARTIFACTS_FOLDER"
         
@@ -1909,13 +1801,8 @@ runs:
           echo "Kernel Uname: ${{ env.KERNEL_UNAME }}"
           echo "Build User: ${{ env.BUILD_USER }}"
           echo "Build Host: ${{ env.BUILD_HOST }}"
-          if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
-            echo "KSUN Version: ${KSUVER:-unknown}"
-            echo "KSUN commit SHA: ${KSU_SHA:-unknown}"
-          else
-            echo "KSU Version: ${KSUVER:-unknown}"
-            echo "KSU commit SHA: ${KSU_SHA:-unknown}"
-          fi
+          echo "KSUN Version: ${KSUVER:-unknown}"
+          echo "KSUN commit SHA: ${KSU_SHA:-unknown}"
           if [ "${{ env.OP_SUSFS }}" = true ]; then
             echo "SUSFS Version: ${SUSVER:-unknown}"
             echo "SUSFS Branch: ${{ env.SUSFS_BRANCH_NAME }}"
@@ -1957,20 +1844,12 @@ runs:
           echo "| **Kernel Uname** | \`${{ env.KERNEL_UNAME }}\` |"
           echo "| **Build User** | ${{ env.BUILD_USER }} |"
           echo "| **Build Host** | ${{ env.BUILD_HOST }} |"
-          if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
-            echo "| **KSUN Version** | ${KSUVER:-unknown} |"
-          else
-            echo "| **KSU Version** | ${KSUVER:-unknown} |"
-          fi
+          echo "| **KSUN Version** | ${KSUVER:-unknown} |"
           
           if [ "$KSU_SHA" != "unknown" ]; then
-            if [ "${{ inputs.ksu_type }}" = "KSUN" ]; then
-              echo "| **KSUN Commit** | [\`${KSU_SHA:0:8}\`](https://github.com/KernelSU-Next/KernelSU-Next/commit/$KSU_SHA) |"
-            else
-              echo "| **KSU Commit** | [\`${KSU_SHA:0:8}\`](https://github.com/tiann/KernelSU/commit/$KSU_SHA) |"
-            fi
+            echo "| **KSUN Commit** | [\`${KSU_SHA:0:8}\`](https://github.com/KernelSU-Next/KernelSU-Next/commit/$KSU_SHA) |"
           else
-            echo "| **KSU Commit** | unknown |"
+            echo "| **KSUN Commit** | unknown |"
           fi
           
           if [ "${{ env.OP_SUSFS }}" = true ]; then
