@@ -5,7 +5,7 @@
 ## 当前支持范围
 
 - 机型：`OP13T`
-- 系统：`OOS15`、`OOS16`
+- 系统：`OOS16`
 - 内核基线：`android15-6.6`
 - 打包方式：`AnyKernel3`
 - Root 方案：`KernelSU-Next`
@@ -15,9 +15,7 @@
 
 - [build-kernel-release.yml](.github/workflows/build-kernel-release.yml)：GitHub Actions 构建与发布入口
 - [action.yml](.github/actions/action.yml)：实际构建复合 Action
-- [OP13T.json](configs/oos15/OP13T.json)：OOS15 构建配置
 - [OP13T.json](configs/oos16/OP13T.json)：OOS16 构建配置
-- [oneplus_13t_v.xml](manifests/oos15/oneplus_13t_v.xml)：OOS15 manifest
 - [oneplus_13t_w.xml](manifests/oos16/oneplus_13t_w.xml)：OOS16 manifest
 
 ## 使用说明

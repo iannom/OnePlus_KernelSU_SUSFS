@@ -85,12 +85,12 @@ jobs:
           done
           echo "]" >> matrix.json
           
-          # 仅保留 OP13T 的 OOS15/OOS16 构建配置。
+          # 仅保留 OP13T 的 OOS16 构建配置。
           jq_filter='map(select(
             .model == "OP13T" and
             .android_version == "android15" and
             .kernel_version == "6.6" and
-            (.os_version == "OOS15" or .os_version == "OOS16")
+            .os_version == "OOS16"
           ))'
           
           filtered=$(jq -c "$jq_filter" matrix.json)
@@ -289,8 +289,8 @@ jobs:
             cat << 'EOF'
           ## 🎯 Build Plan
           
-          **Target:** OP13T (OOS15 / OOS16)  
-          **Devices:** ${{ steps.set-matrix.outputs.count }}  
+          **Target:** OP13T (OOS16)
+          **Devices:** ${{ steps.set-matrix.outputs.count }}
           
           **Configuration:**
           EOF

@@ -194,15 +194,12 @@ runs:
         fi
 
         case "$os_version" in
-          OOS15)
-            expected_manifest="oneplus_13t_v.xml"
-            ;;
           OOS16)
             expected_manifest="oneplus_13t_w.xml"
             ;;
           *)
             expected_manifest=""
-            errors+=("Only OOS15/OOS16 are supported. Got: '$os_version'")
+            errors+=("Only OOS16 is supported. Got: '$os_version'")
             ;;
         esac
 
@@ -420,10 +417,20 @@ runs:
         
         CONFIG_FILES=("build.config.common" "build.config.constants")
         BRANCH_LINE=""
+        KMI_LINE=""
         for f in "${CONFIG_FILES[@]}"; do
           if [ -f "$f" ]; then
-            l=$(grep '^[[:space:]]*BRANCH=' "$f" || true)
-            if [ -n "$l" ]; then BRANCH_LINE="$l"; break; fi
+            if [ -z "$BRANCH_LINE" ]; then
+              l=$(grep '^[[:space:]]*BRANCH=' "$f" || true)
+              if [ -n "$l" ]; then BRANCH_LINE="$l"; fi
+            fi
+            if [ -z "$KMI_LINE" ]; then
+              l=$(grep '^[[:space:]]*KMI_GENERATION=' "$f" || true)
+              if [ -n "$l" ]; then KMI_LINE="$l"; fi
+            fi
+            if [ -n "$BRANCH_LINE" ] && [ -n "$KMI_LINE" ]; then
+              break
+            fi
           fi
         done
         
@@ -443,6 +450,13 @@ runs:
         PATCHLEVEL=$(grep '^PATCHLEVEL *=' Makefile | awk '{print $3}')
         SUBLEVEL=$(grep '^SUBLEVEL *=' Makefile | awk '{print $3}')
         FULL_VERSION="$VERSION.$PATCHLEVEL.$SUBLEVEL"
+        KMI_GENERATION_VALUE="${KMI_LINE#*=}"
+        KMI_GENERATION_VALUE="$(echo "$KMI_GENERATION_VALUE" | tr -d '[:space:]')"
+
+        if [ -z "$KMI_GENERATION_VALUE" ]; then
+          KMI_GENERATION_VALUE="$VERSION.$PATCHLEVEL"
+          echo "::warning::No KMI_GENERATION= found in config files, fallback to $KMI_GENERATION_VALUE"
+        fi
         
         cd "$ARTIFACTS_FOLDER"
         echo "$ANDROID_VERSION-$FULL_VERSION" > "${OP_MODEL}_${OP_OS_VERSION}.txt"
@@ -453,12 +467,14 @@ runs:
           echo "KERNEL_VER=$VERSION.$PATCHLEVEL"
           echo "TKERNEL_VER=$FULL_VERSION"
           echo "KERNEL_FULL_VER=$ANDROID_VERSION-$FULL_VERSION"
+          echo "KMI_GENERATION=$KMI_GENERATION_VALUE"
           if [ "${{ env.OP_SUSFS }}" = true ]; then
             echo "SUSFS_KERNEL_BRANCH=gki-$ANDROID_VERSION-$VERSION.$PATCHLEVEL"
           fi
         } >> "$GITHUB_ENV"
         
         echo "✅ Detected: $ANDROID_VERSION-$FULL_VERSION"
+        echo "   KMI Generation: $KMI_GENERATION_VALUE"
         if [ "${{ env.OP_SUSFS }}" = true ]; then
           echo "   SUSFS Branch: gki-$ANDROID_VERSION-$VERSION.$PATCHLEVEL"
         fi
@@ -1363,8 +1379,20 @@ runs:
         echo "Customize Kernel Branding"
         cd "$COMMON_KERNEL_FOLDER"
         mkdir -p out
-        CUSTOM_LOCALVERSION="-${ANDROID_VER}-${OP_UNAME}"
+        SHORT_COMMIT_HASH="$(git rev-parse --short=12 HEAD 2>/dev/null || echo 000000000000)"
+        if [[ ! "$SHORT_COMMIT_HASH" =~ ^[0-9a-fA-F]{12}$ ]]; then
+          SHORT_COMMIT_HASH="000000000000"
+        fi
+        CI_BUILD_SUFFIX=""
+        if [[ "${GITHUB_RUN_NUMBER:-}" =~ ^[0-9]+$ ]]; then
+          CI_BUILD_SUFFIX="-ab${GITHUB_RUN_NUMBER}"
+        fi
+        CUSTOM_LOCALVERSION="-${ANDROID_VER}-${KMI_GENERATION}-g${SHORT_COMMIT_HASH}${CI_BUILD_SUFFIX}"
+        KERNEL_RELEASE_TAG="${TKERNEL_VER}${CUSTOM_LOCALVERSION}"
         echo "CUSTOM_LOCALVERSION=$CUSTOM_LOCALVERSION" >> "$GITHUB_ENV"
+        echo "KERNEL_RELEASE_TAG=$KERNEL_RELEASE_TAG" >> "$GITHUB_ENV"
+        echo "OFFICIAL_KERNEL_COMMIT_HASH=$SHORT_COMMIT_HASH" >> "$GITHUB_ENV"
+        echo "✅ Kernel release tag: $KERNEL_RELEASE_TAG"
 
     - name: Disable GPUEB
       shell: bash
@@ -1748,10 +1776,11 @@ runs:
         
         sed -i 's/do.check_boot_version=.*/do.check_boot_version=1/' anykernel.sh
         
+        ZIP_KERNEL_TAG="${KERNEL_RELEASE_TAG:-${TKERNEL_VER}${CUSTOM_LOCALVERSION:-}}"
         if [ "${{ env.OP_SUSFS }}" = true ]; then
-          ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_KSUN_${KSUVER:-unknown}_SuSFS_${SUSVER:-unknown}.zip"
+          ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${ZIP_KERNEL_TAG}_KSUN_${KSUVER:-unknown}_SuSFS_${SUSVER:-unknown}.zip"
         else
-          ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_KSUN_${KSUVER:-unknown}.zip"
+          ZIP_NAME="AK3_${OP_MODEL}_${OP_OS_VERSION}_${ZIP_KERNEL_TAG}_KSUN_${KSUVER:-unknown}.zip"
         fi
         mkdir -p "$ARTIFACTS_FOLDER"
         
