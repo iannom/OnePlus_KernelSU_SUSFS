@@ -587,17 +587,63 @@ jobs:
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SUSFS_BASE_VERSION: ${{ needs.set-op-model.outputs.susfs_base_version }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus OP13T Kernels With KernelSU / KernelSU Next & SUSFS ${{ needs.set-op-model.outputs.susfs_base_version }} *TEST BUILD*'
+      SUSFS_RESOLVED_HASH: ${{ needs.set-op-model.outputs.susfs_hash }}
+      GITLAB_PROJECT_PATH: simonpunk/susfs4ksu
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: 🏷️ Generate and Create New Tag
+      - name: 🔎 Resolve Release Metadata
+        shell: bash
         run: |
+          set -euo pipefail
+
+          susfs_base_version="${SUSFS_BASE_VERSION:-}"
+          if [ -z "$susfs_base_version" ]; then
+            if [ -z "${SUSFS_RESOLVED_HASH:-}" ] || [ "$SUSFS_RESOLVED_HASH" = "disabled" ]; then
+              echo "::error::SUSFS_BASE_VERSION is empty and cannot be recovered because SUSFS_RESOLVED_HASH is unavailable."
+              exit 1
+            fi
+
+            echo "::warning::SUSFS_BASE_VERSION is empty in trigger-release. Falling back to GitLab lookup with commit $SUSFS_RESOLVED_HASH."
+
+            VERSION_QUERY="{ project(fullPath: \"${GITLAB_PROJECT_PATH}\") { repository { blobs(paths: [\"kernel_patches/include/linux/susfs.h\"], ref: \"${SUSFS_RESOLVED_HASH}\") { nodes { rawBlob } } } } }"
+            VERSION_RESPONSE=$(curl -s --fail -G "https://gitlab.com/api/graphql" --data-urlencode "query=$VERSION_QUERY")
+            susfs_base_version=$(echo "$VERSION_RESPONSE" | jq -r '.data.project.repository.blobs.nodes[0].rawBlob // empty' | awk -F'"' '/#define SUSFS_VERSION/ {print $2; exit}')
+          fi
+
+          if [ -z "$susfs_base_version" ] || [ "$susfs_base_version" = "null" ]; then
+            echo "::error::Could not determine a valid SUSFS_BASE_VERSION for release metadata."
+            exit 1
+          fi
+
+          release_name="*TEST BUILD* OnePlus OP13T Kernels With KernelSU / KernelSU Next & SUSFS ${susfs_base_version} *TEST BUILD*"
+
+          {
+            echo "SUSFS_BASE_VERSION=$susfs_base_version"
+            echo "RELEASE_NAME<<__EOF__"
+            echo "$release_name"
+            echo "__EOF__"
+          } >> "$GITHUB_ENV"
+
+          echo "Resolved release metadata:"
+          echo "  SUSFS_BASE_VERSION=$susfs_base_version"
+          echo "  RELEASE_NAME=$release_name"
+
+      - name: 🏷️ Generate and Create New Tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUSFS_BASE_VERSION:-}" ] || [ "$SUSFS_BASE_VERSION" = "null" ]; then
+            echo "::error::SUSFS_BASE_VERSION is empty. Refusing to generate a release tag."
+            exit 1
+          fi
+
           # Only search for tags starting with this SUSFS version
-          LATEST_MATCHING_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags \
+          LATEST_MATCHING_TAG=$(gh api "repos/$REPO_OWNER/$REPO_NAME/tags" \
             --jq "[.[] | select(.name | startswith(\"${SUSFS_BASE_VERSION}-r\"))] \
                   | sort_by(.name | split(\"-r\")[1] | tonumber) \
                   | last | .name // empty")
@@ -609,11 +655,16 @@ jobs:
             # Only increment the -r* suffix of the latest release for this version
             NEW_TAG=$(echo "$LATEST_MATCHING_TAG" | awk -F'-r' '{printf "%s-r%d", $1, $2+1}')
           fi
+
+          if [ -z "$NEW_TAG" ] || [ "$NEW_TAG" = "null" ] || [[ "$NEW_TAG" == -* ]]; then
+            echo "::error::Generated invalid tag name: '$NEW_TAG'"
+            exit 1
+          fi
           
           echo "New tag: $NEW_TAG"
           echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
-          git tag $NEW_TAG
-          git push origin $NEW_TAG
+          git tag -- "$NEW_TAG"
+          git push origin "refs/tags/$NEW_TAG"
 
       - name: 📥 Download Artifacts
         uses: actions/download-artifact@v8
@@ -943,9 +994,9 @@ jobs:
 
       - name: 🚀 Create GitHub Release
         run: |
-          gh release create "${{ env.NEW_TAG }}" \
-            --repo "${{ env.REPO_OWNER }}/${{ env.REPO_NAME }}" \
-            --title "${{ env.RELEASE_NAME }}" \
+          gh release create "$NEW_TAG" \
+            --repo "$REPO_OWNER/$REPO_NAME" \
+            --title "$RELEASE_NAME" \
             --notes-file release_notes.md \
             --draft
 
@@ -954,7 +1005,7 @@ jobs:
           for file in ./downloaded-artifacts/*.zip; do
             if [ -f "$file" ]; then
               echo "Uploading $file..."
-              gh release upload "${{ env.NEW_TAG }}" "$file" --clobber
+              gh release upload "$NEW_TAG" "$file" --clobber
             fi
           done
 
@@ -967,7 +1018,7 @@ jobs:
           
           ## 🎉 Release Created Successfully
           
-          **Tag:** [\`${{ env.NEW_TAG }}\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ env.NEW_TAG }})  
+          **Tag:** [\`$NEW_TAG\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/$NEW_TAG)
           **Kernels:** $(find ./downloaded-artifacts -maxdepth 1 -name "*.zip" -type f | wc -l)
           
           ### 📦 Assets
