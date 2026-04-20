@@ -1,4 +1,4 @@
-# OnePlus OP13T KernelSU SUSFS
+# OnePlus OP13T KernelSU / KernelSU-Next SUSFS
 
 仅保留 OnePlus OP13T 的内核构建仓库。
 
@@ -8,7 +8,7 @@
 - 系统：`OOS16`
 - 内核基线：`android15-6.6`
 - 打包方式：`AnyKernel3`
-- Root 方案：`KernelSU-Next`
+- Root 方案：`KernelSU`、`KernelSU-Next`
 - 内核特性：`SUSFS`、`BBG`、`HMBIRD`、`BBR`、`TTL`、`IP Set`、`Unicode Fix`、`Droidspaces`、`NTSync`
 
 ## 仓库结构
@@ -21,7 +21,7 @@
 ## 使用说明
 
 1. 在 GitHub Actions 中运行 `Build and Release OnePlus OP13T Kernels`。
-2. 按需设置 `KernelSU-Next` 分支/提交与编译优化等级。
+2. 按需设置 `KernelSU` / `KernelSU-Next` 分支或提交与编译优化等级。
 3. 如需固定 `SUSFS` 版本，可填写 `susfs_branch_or_commit`；留空则默认使用 `gki-android15-6.6`。
 
 ## 风险说明
@@ -33,5 +33,6 @@
 ## 相关链接
 
 - [兼容性说明](compatibility.md)
+- [KernelSU](https://github.com/tiann/KernelSU)
 - [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next)
 - [SUSFS](https://gitlab.com/simonpunk/susfs4ksu)

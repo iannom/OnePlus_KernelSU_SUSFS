@@ -13,7 +13,7 @@ on:
         type: boolean
         default: false
       ksu_options:
-        description: 'Enter KernelSU-Next build json'
+        description: 'Enter KernelSU build json'
         required: true
         type: string
         default: '[{"type":"ksun","hash":"dev"}]'
@@ -65,7 +65,30 @@ jobs:
           echo "::group::Matrix generation"
           
           ksu_options_raw='${{ github.event.inputs.ksu_options }}'
-          if ! ksu_options_normalized=$(echo "$ksu_options_raw" | jq -c 'map(if .type then .type |= ascii_upcase | if .type != "KSUN" then error("Only KSUN is supported") elif .hash == null then .hash = "dev" else . end else error("No type found") end)' 2>&1); then
+          if ! ksu_options_normalized=$(echo "$ksu_options_raw" | jq -c '
+            if type != "array" then
+              error("ksu_options must be a JSON array")
+            elif length != 1 then
+              error("Exactly one KSU option is supported per run")
+            else
+              map(
+                if .type then
+                  .type |= ascii_upcase |
+                  if (.type == "KSUN" or .type == "KSU") then
+                    if (.hash == null or .hash == "") then
+                      .hash = (if .type == "KSUN" then "dev" else "main" end)
+                    else
+                      .
+                    end
+                  else
+                    error("Only KSUN or KSU are supported")
+                  end
+                else
+                  error("No type found")
+                end
+              )
+            end
+          ' 2>&1); then
             echo "::error::ksu_options validation failed: $ksu_options_normalized"
             exit 1
           fi
@@ -127,8 +150,13 @@ jobs:
           
           ksu_type=$(echo "$ksu_options_normalized" | jq -r '.[0].type')
           ksu_ref=$(echo "$ksu_options_normalized" | jq -r '.[0].hash')
-          KSU_REPO_OWNER="KernelSU-Next"
-          KSU_REPO_NAME="KernelSU-Next"
+          if [ "$ksu_type" = "KSUN" ]; then
+            KSU_REPO_OWNER="KernelSU-Next"
+            KSU_REPO_NAME="KernelSU-Next"
+          else
+            KSU_REPO_OWNER="tiann"
+            KSU_REPO_NAME="KernelSU"
+          fi
           
           HEAD_REF="refs/heads/${ksu_ref}"
           TAG_REF="refs/tags/${ksu_ref}"
@@ -295,7 +323,7 @@ jobs:
           **Configuration:**
           EOF
           
-            echo "- KSUN Config: $ksu_display"
+            echo "- KSU Config: $ksu_display"
             echo "- Build Timestamp: $build_ts_display"
           
             cat << 'EOF'
@@ -328,7 +356,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.set-op-model.outputs.matrix) }}
     outputs:
-      ksun_ver: ${{ steps.build-stat.outputs.ksu_version }}
+      ksu_ver: ${{ steps.build-stat.outputs.ksu_ver }}
     steps:
       - name: 🧹 Emergency Disk Cleanup
         if: ${{ matrix.disk_cleanup }}
@@ -399,7 +427,7 @@ jobs:
             echo "::endgroup::"
           fi
 
-      - name: 🧹 Prepare op_config_json (without KSUN runtime fields)
+      - name: 🧹 Prepare op_config_json (without KSU runtime fields)
         id: prepare_config
         shell: bash
         run: |
@@ -437,8 +465,12 @@ jobs:
             echo ""
             echo "Outputs:"
             echo "  - Kernel: ${{ steps.build.outputs.kernel_version }}"
-            echo "  - KSU Next: v${{ steps.build.outputs.ksu_version }}"
-            echo "ksun_ver=${{ steps.build.outputs.ksu_version }}" >> "$GITHUB_OUTPUT"
+            if [ "${{ matrix.ksu_type }}" = "KSUN" ]; then
+              echo "  - KSU Next: v${{ steps.build.outputs.ksu_version }}"
+            else
+              echo "  - KSU: v${{ steps.build.outputs.ksu_version }}"
+            fi
+            echo "ksu_ver=${{ steps.build.outputs.ksu_version }}" >> "$GITHUB_OUTPUT"
             if [ "${{ matrix.susfs }}" = true ]; then
               echo "  - SUSFS: ${{ steps.build.outputs.susfs_version }}"
             fi
@@ -481,8 +513,16 @@ jobs:
           | Metric | Value |
           |--------|-------|
           | **Kernel** | ${{ steps.build.outputs.kernel_version }} |
+          EOF
+            if [ "${{ matrix.ksu_type }}" = "KSUN" ]; then
+              cat >> $GITHUB_STEP_SUMMARY << EOF
           | **KSU Next** | v${{ steps.build.outputs.ksu_version }} |
           EOF
+            else
+              cat >> $GITHUB_STEP_SUMMARY << EOF
+          | **KSU** | v${{ steps.build.outputs.ksu_version }} |
+          EOF
+            fi
             
             if [ "${{ matrix.susfs }}" = true ]; then
               cat >> $GITHUB_STEP_SUMMARY << EOF
@@ -547,7 +587,7 @@ jobs:
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SUSFS_BASE_VERSION: ${{ needs.set-op-model.outputs.susfs_base_version }}
-      RELEASE_NAME: '*TEST BUILD* OnePlus OP13T Kernels With KernelSU Next & SUSFS ${{ needs.set-op-model.outputs.susfs_base_version }} *TEST BUILD*'
+      RELEASE_NAME: '*TEST BUILD* OnePlus OP13T Kernels With KernelSU / KernelSU Next & SUSFS ${{ needs.set-op-model.outputs.susfs_base_version }} *TEST BUILD*'
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v6
@@ -624,9 +664,16 @@ jobs:
           if [ -z "$susfs_input" ]; then
             susfs_input="gki-android15-6.6"
           fi
+          if [ "$ksu_type" = "KSUN" ]; then
+            root_solution_name="KernelSU Next"
+            root_manager_name="KernelSU Next Manager"
+          else
+            root_solution_name="KernelSU"
+            root_manager_name="KernelSU Manager"
+          fi
           
           cat << EOF > release_notes.md
-          # 🎯 OnePlus OP13T Kernels with KernelSU Next & SUSFS $SUSFS_BASE_VERSION
+          # 🎯 OnePlus OP13T Kernels with $root_solution_name & SUSFS $SUSFS_BASE_VERSION
           
           > **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')  
           > **Build ID:** \`${{ github.run_id }}\`  
@@ -725,10 +772,17 @@ jobs:
           }
           
           ksu_display=$(ksu_display_value "$ksu_ref" "$ksu_resolved_hash")
-          cat << EOF >> release_notes.md
+          if [ "$ksu_type" == "KSUN" ]; then
+            cat << EOF >> release_notes.md
           | **KernelSU Next Branch** | \`$ksu_display\` |
           | **KernelSU Next Version** | \`$ksu_ver_global\` |
           EOF
+          else
+            cat << EOF >> release_notes.md
+          | **KernelSU Branch** | \`$ksu_display\` |
+          | **KernelSU Version** | \`$ksu_ver_global\` |
+          EOF
+          fi
           cat << EOF >> release_notes.md
           | **SUSFS Version** | \`$SUSFS_BASE_VERSION\` |
           | **Optimization Level** | \`$OPTIMIZE_LEVEL\` |
@@ -746,9 +800,17 @@ jobs:
           ## ✨ Features & Capabilities
           
           ### 🔐 Root Management
-          - **KernelSU Next** - Next-generation kernel-level root solution
           - **SUSFS $SUSFS_BASE_VERSION** - Advanced hiding and security features
           EOF
+          if [ "$ksu_type" == "KSUN" ]; then
+            cat << EOF >> release_notes.md
+          - **KernelSU Next** - Next-generation kernel-level root solution
+          EOF
+          else
+            cat << EOF >> release_notes.md
+          - **KernelSU** - Kernel-level root solution
+          EOF
+          fi
           if [ "$ksu_type" == "KSUN" ] && [ "${ksu_ver_global:-0}" -lt 12884 ]; then
             cat << EOF >> release_notes.md
           - **Magic Mount Support** - Seamless file system modifications
@@ -795,8 +857,19 @@ jobs:
           ## 📱 Manager Applications
           
           ### Official Manager
+          EOF
+          if [ "$ksu_type" == "KSUN" ]; then
+            cat << EOF >> release_notes.md
           - **KernelSU Next Manager**  
             → [GitHub Release](https://github.com/KernelSU-Next/KernelSU-Next/releases)
+          EOF
+          else
+            cat << EOF >> release_notes.md
+          - **KernelSU Manager**
+            → [GitHub Release](https://github.com/tiann/KernelSU/releases)
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           
           ### Required Module
           - **KSU SUSFS Module** (Required for SUSFS features)  
@@ -813,7 +886,7 @@ jobs:
           ### Prerequisites
           - Unlocked bootloader.
           - Backup your current boot image.
-          - Have root access using Magisk / KernelSU-Next / Apatch.
+          - Have root access using Magisk / KernelSU / KernelSU-Next / Apatch.
           
           ### Via Kernel Flasher
           1. Download the appropriate ZIP for your device.
@@ -821,10 +894,10 @@ jobs:
           3. Based on root method, follow the steps:
             a. If root access is from Magisk(any forks): Perform complete uninstall from Magisk Manager.
             b. If root access is from KSU LKM: Flash stock boot/init_boot/vendor_boot based on the image you previously patched, or uninstall LKM. Recommended to flash stock image.
-            c. If root access is from KSU GKI: Uninstall manager. Delete `/data/adb/ksud` bin file. Reinstall the matching KernelSU-Next manager. [Not required every time]
+            c. If root access is from KSU GKI: Uninstall manager. Delete `/data/adb/ksud` bin file. Reinstall the matching manager for the ZIP variant. [Not required every time]
             d. If root access is from Apatch(any forks): Delete all files from /data/adb. This is to start fresh and reduce multiple root implementation detected by modules.
           4. Reboot system.
-          5. Install KernelSU-Next Manager.
+          5. Install $root_manager_name.
           6. Install SusFS module from manager.
           
           ---
@@ -841,7 +914,7 @@ jobs:
           - Added Ptrace leak fix for kernels < 5.16.
           - Compiler optimizations (${{ inputs.optimize_level }}).
           - Additional General Optimisations.
-          - KernelSU-Next Manager support.
+          - Matching manager support for the selected KSU variant.
           - Unicode Bypass Fix
           - Droidspaces Support
           - NTSync Support
@@ -854,6 +927,7 @@ jobs:
           ## 🙏 Credits
           
           - **KernelSU Next Team** - Root solution
+          - **KernelSU Team** - Root solution
           - **simonpunk** - SUSFS development
           - **OnePlus** - Kernel source code
           - **Community Contributors** - Testing and feedback
