@@ -32,7 +32,7 @@ on:
         type: string
         default: ''
       susfs_branch_or_commit:
-        description: 'Enter SusFS Branch or commit hash for android15-6.6'
+        description: 'Enter SusFS Branch or commit hash for android15-6.6 (only used when selected configs enable SUSFS)'
         type: string
         default: ''
 
@@ -43,6 +43,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       device_count: ${{ steps.set-matrix.outputs.count }}
       susfs_hash: ${{ steps.set-matrix.outputs.susfs_hash }}
+      susfs_enabled: ${{ steps.set-matrix.outputs.susfs_enabled }}
       ksu_resolved_hash:    ${{ steps.set-matrix.outputs.ksu_resolved_hash }}
       ksu_options_normalized: ${{ steps.set-matrix.outputs.ksu_options_normalized }}
       susfs_base_version: ${{ steps.set-matrix.outputs.susfs_base_version }}
@@ -207,11 +208,13 @@ jobs:
           # Inject ksu_resolved_hash into each device in the matrix
           merged_matrix=$(echo "$merged_matrix" | jq  --arg resolved_sha "$resolved_sha" 'map(.ksu_resolved_hash = $resolved_sha)')
           
-          # SUSFS hash fetch
-          SUSFS_REPO="https://gitlab.com/simonpunk/susfs4ksu.git"
+          # 统一用一个布尔输出表示本次矩阵是否启用了 SUSFS，
+          # 后续摘要、发布元数据和 release notes 都基于它分支，避免出现“配置已关闭但发布仍强依赖 SUSFS”的不一致。
           GITLAB_PROJECT_PATH="simonpunk/susfs4ksu"
+          susfs_enabled=$(echo "$merged_matrix" | jq -r 'any(.[]; .susfs == true)')
+          echo "susfs_enabled=$susfs_enabled" >> "$GITHUB_OUTPUT"
           
-          if echo "$merged_matrix" | jq -e 'any(.[]; .susfs == true)' >/dev/null; then
+          if [ "$susfs_enabled" = "true" ]; then
             susfs_default_ref="gki-android15-6.6"
             susfs_input="${{ inputs.susfs_branch_or_commit }}"
             susfs_ref="${susfs_input:-$susfs_default_ref}"
@@ -267,6 +270,9 @@ jobs:
             fi
           else
             susfs_hash="disabled"
+            if [ -n "${{ inputs.susfs_branch_or_commit }}" ]; then
+              echo "::warning::susfs_branch_or_commit is set, but all selected configs have susfs=false. The input will be ignored."
+            fi
             echo "susfs_hash=$susfs_hash" >> "$GITHUB_OUTPUT"
           fi
 
@@ -335,14 +341,22 @@ jobs:
           EOF
           } >> "$GITHUB_STEP_SUMMARY"
 
-          susfs_ref_input="${{ inputs.susfs_branch_or_commit }}"
-          susfs_hash="${{ steps.set-matrix.outputs.susfs_hash }}"
-          if [ -z "$susfs_ref_input" ]; then
-            echo "- android15-6.6: 🔄 auto (\`$susfs_hash\`)" >> $GITHUB_STEP_SUMMARY
-          elif [[ "$susfs_ref_input" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "- android15-6.6: 📌 \`$susfs_ref_input\`" >> $GITHUB_STEP_SUMMARY
+          susfs_enabled="${{ steps.set-matrix.outputs.susfs_enabled }}"
+          if [ "$susfs_enabled" != "true" ]; then
+            echo "- 当前默认配置已禁用 SUSFS" >> $GITHUB_STEP_SUMMARY
+            if [ -n "${{ inputs.susfs_branch_or_commit }}" ]; then
+              echo "- 已忽略输入的 \`susfs_branch_or_commit\`，因为没有任何构建项启用 SUSFS" >> $GITHUB_STEP_SUMMARY
+            fi
           else
-            echo "- android15-6.6: 🔀 \`$susfs_ref_input\` (\`$susfs_hash\`)" >> $GITHUB_STEP_SUMMARY
+            susfs_ref_input="${{ inputs.susfs_branch_or_commit }}"
+            susfs_hash="${{ steps.set-matrix.outputs.susfs_hash }}"
+            if [ -z "$susfs_ref_input" ]; then
+              echo "- android15-6.6: 🔄 auto (\`$susfs_hash\`)" >> $GITHUB_STEP_SUMMARY
+            elif [[ "$susfs_ref_input" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "- android15-6.6: 📌 \`$susfs_ref_input\`" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- android15-6.6: 🔀 \`$susfs_ref_input\` (\`$susfs_hash\`)" >> $GITHUB_STEP_SUMMARY
+            fi
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -587,6 +601,7 @@ jobs:
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SUSFS_BASE_VERSION: ${{ needs.set-op-model.outputs.susfs_base_version }}
+      SUSFS_ENABLED: ${{ needs.set-op-model.outputs.susfs_enabled }}
       SUSFS_RESOLVED_HASH: ${{ needs.set-op-model.outputs.susfs_hash }}
       GITLAB_PROJECT_PATH: simonpunk/susfs4ksu
     steps:
@@ -600,36 +615,56 @@ jobs:
         run: |
           set -euo pipefail
 
+          susfs_enabled="${SUSFS_ENABLED:-false}"
           susfs_base_version="${SUSFS_BASE_VERSION:-}"
-          if [ -z "$susfs_base_version" ]; then
-            if [ -z "${SUSFS_RESOLVED_HASH:-}" ] || [ "$SUSFS_RESOLVED_HASH" = "disabled" ]; then
-              echo "::error::SUSFS_BASE_VERSION is empty and cannot be recovered because SUSFS_RESOLVED_HASH is unavailable."
+          release_tag_base=""
+          release_name=""
+
+          if [ "$susfs_enabled" = "true" ]; then
+            if [ -z "$susfs_base_version" ]; then
+              if [ -z "${SUSFS_RESOLVED_HASH:-}" ] || [ "$SUSFS_RESOLVED_HASH" = "disabled" ]; then
+                echo "::error::SUSFS_BASE_VERSION is empty and cannot be recovered because SUSFS_RESOLVED_HASH is unavailable."
+                exit 1
+              fi
+
+              echo "::warning::SUSFS_BASE_VERSION is empty in trigger-release. Falling back to GitLab lookup with commit $SUSFS_RESOLVED_HASH."
+
+              VERSION_QUERY="{ project(fullPath: \"${GITLAB_PROJECT_PATH}\") { repository { blobs(paths: [\"kernel_patches/include/linux/susfs.h\"], ref: \"${SUSFS_RESOLVED_HASH}\") { nodes { rawBlob } } } } }"
+              VERSION_RESPONSE=$(curl -s --fail -G "https://gitlab.com/api/graphql" --data-urlencode "query=$VERSION_QUERY")
+              susfs_base_version=$(echo "$VERSION_RESPONSE" | jq -r '.data.project.repository.blobs.nodes[0].rawBlob // empty' | awk -F'"' '/#define SUSFS_VERSION/ {print $2; exit}')
+            fi
+
+            if [ -z "$susfs_base_version" ] || [ "$susfs_base_version" = "null" ]; then
+              echo "::error::Could not determine a valid SUSFS_BASE_VERSION for release metadata."
               exit 1
             fi
 
-            echo "::warning::SUSFS_BASE_VERSION is empty in trigger-release. Falling back to GitLab lookup with commit $SUSFS_RESOLVED_HASH."
-
-            VERSION_QUERY="{ project(fullPath: \"${GITLAB_PROJECT_PATH}\") { repository { blobs(paths: [\"kernel_patches/include/linux/susfs.h\"], ref: \"${SUSFS_RESOLVED_HASH}\") { nodes { rawBlob } } } } }"
-            VERSION_RESPONSE=$(curl -s --fail -G "https://gitlab.com/api/graphql" --data-urlencode "query=$VERSION_QUERY")
-            susfs_base_version=$(echo "$VERSION_RESPONSE" | jq -r '.data.project.repository.blobs.nodes[0].rawBlob // empty' | awk -F'"' '/#define SUSFS_VERSION/ {print $2; exit}')
+            release_tag_base="$susfs_base_version"
+            release_name="*TEST BUILD* OnePlus OP13T Kernels With KernelSU / KernelSU Next & SUSFS ${susfs_base_version} *TEST BUILD*"
+          else
+            susfs_base_version=""
+            release_tag_base="no-susfs"
+            release_name="*TEST BUILD* OnePlus OP13T Kernels With KernelSU / KernelSU Next *TEST BUILD*"
+            echo "::notice::Selected configs have susfs=false. Release metadata will be generated without SUSFS."
           fi
 
-          if [ -z "$susfs_base_version" ] || [ "$susfs_base_version" = "null" ]; then
-            echo "::error::Could not determine a valid SUSFS_BASE_VERSION for release metadata."
+          if [ -z "$release_tag_base" ] || [ "$release_tag_base" = "null" ]; then
+            echo "::error::RELEASE_TAG_BASE is empty. Refusing to continue."
             exit 1
           fi
 
-          release_name="*TEST BUILD* OnePlus OP13T Kernels With KernelSU / KernelSU Next & SUSFS ${susfs_base_version} *TEST BUILD*"
-
           {
             echo "SUSFS_BASE_VERSION=$susfs_base_version"
+            echo "RELEASE_TAG_BASE=$release_tag_base"
             echo "RELEASE_NAME<<__EOF__"
             echo "$release_name"
             echo "__EOF__"
           } >> "$GITHUB_ENV"
 
           echo "Resolved release metadata:"
+          echo "  SUSFS_ENABLED=$susfs_enabled"
           echo "  SUSFS_BASE_VERSION=$susfs_base_version"
+          echo "  RELEASE_TAG_BASE=$release_tag_base"
           echo "  RELEASE_NAME=$release_name"
 
       - name: 🏷️ Generate and Create New Tag
@@ -637,22 +672,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${SUSFS_BASE_VERSION:-}" ] || [ "$SUSFS_BASE_VERSION" = "null" ]; then
-            echo "::error::SUSFS_BASE_VERSION is empty. Refusing to generate a release tag."
+          if [ -z "${RELEASE_TAG_BASE:-}" ] || [ "$RELEASE_TAG_BASE" = "null" ]; then
+            echo "::error::RELEASE_TAG_BASE is empty. Refusing to generate a release tag."
             exit 1
           fi
 
-          # Only search for tags starting with this SUSFS version
+          # 仅在相同发布基线内自增 r 序号，SUSFS 开启和关闭两条线彼此独立。
           LATEST_MATCHING_TAG=$(gh api "repos/$REPO_OWNER/$REPO_NAME/tags" \
-            --jq "[.[] | select(.name | startswith(\"${SUSFS_BASE_VERSION}-r\"))] \
+            --jq "[.[] | select(.name | startswith(\"${RELEASE_TAG_BASE}-r\"))] \
                   | sort_by(.name | split(\"-r\")[1] | tonumber) \
                   | last | .name // empty")
           
           if [ -z "$LATEST_MATCHING_TAG" ]; then
-            # No existing release for this version SUSFS → first release
-            NEW_TAG="${SUSFS_BASE_VERSION}-r1"
+            NEW_TAG="${RELEASE_TAG_BASE}-r1"
           else
-            # Only increment the -r* suffix of the latest release for this version
             NEW_TAG=$(echo "$LATEST_MATCHING_TAG" | awk -F'-r' '{printf "%s-r%d", $1, $2+1}')
           fi
 
@@ -709,10 +742,11 @@ jobs:
           
           OPTIMIZE_LEVEL="${{ inputs.optimize_level }}"
           CLEAN_BUILD="${{ inputs.clean_build }}"
+          susfs_enabled="${{ needs.set-op-model.outputs.susfs_enabled }}"
           
           susfs_input="${{ inputs.susfs_branch_or_commit }}"
           susfs_resolved_hash="${{ needs.set-op-model.outputs.susfs_hash }}"
-          if [ -z "$susfs_input" ]; then
+          if [ "$susfs_enabled" = "true" ] && [ -z "$susfs_input" ]; then
             susfs_input="gki-android15-6.6"
           fi
           if [ "$ksu_type" = "KSUN" ]; then
@@ -722,9 +756,13 @@ jobs:
             root_solution_name="KernelSU"
             root_manager_name="KernelSU Manager"
           fi
+          release_title="OnePlus OP13T Kernels with $root_solution_name"
+          if [ "$susfs_enabled" = "true" ]; then
+            release_title="$release_title & SUSFS $SUSFS_BASE_VERSION"
+          fi
           
           cat << EOF > release_notes.md
-          # 🎯 OnePlus OP13T Kernels with $root_solution_name & SUSFS $SUSFS_BASE_VERSION
+          # 🎯 $release_title
           
           > **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')  
           > **Build ID:** \`${{ github.run_id }}\`  
@@ -835,23 +873,35 @@ jobs:
           EOF
           fi
           cat << EOF >> release_notes.md
-          | **SUSFS Version** | \`$SUSFS_BASE_VERSION\` |
           | **Optimization Level** | \`$OPTIMIZE_LEVEL\` |
           | **Clean Build** | $( [ "$CLEAN_BUILD" = "true" ] && echo "✅ Yes (no ccache)" || echo "❌ No (ccache enabled)" ) |
           | **Compiler** | Clang (version varies by device) |
+          EOF
+          if [ "$susfs_enabled" = "true" ]; then
+            cat << EOF >> release_notes.md
+          | **SUSFS Version** | \`$SUSFS_BASE_VERSION\` |
           
           ### 📌 SUSFS Configuration
           
           | Kernel Version | SUSFS Commit |
           |----------------|--------------|
           | android15-6.6 | \`$susfs_input ($susfs_resolved_hash)\` |
+          EOF
+          else
+            cat << EOF >> release_notes.md
+
+          ### 📌 SUSFS Configuration
+
+          当前发布构建未启用 SUSFS。
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           
           ---
           
           ## ✨ Features & Capabilities
           
           ### 🔐 Root Management
-          - **SUSFS $SUSFS_BASE_VERSION** - Advanced hiding and security features
           EOF
           if [ "$ksu_type" == "KSUN" ]; then
             cat << EOF >> release_notes.md
@@ -860,6 +910,11 @@ jobs:
           else
             cat << EOF >> release_notes.md
           - **KernelSU** - Kernel-level root solution
+          EOF
+          fi
+          if [ "$susfs_enabled" = "true" ]; then
+            cat << EOF >> release_notes.md
+          - **SUSFS $SUSFS_BASE_VERSION** - Advanced hiding and security features
           EOF
           fi
           if [ "$ksu_type" == "KSUN" ] && [ "${ksu_ver_global:-0}" -lt 12884 ]; then
@@ -875,6 +930,9 @@ jobs:
           cat << EOF >> release_notes.md
           ### 🛡️ Security & Privacy
           - **Baseband Guard (BBG)** - LSM-based baseband security
+          EOF
+          if [ "$susfs_enabled" = "true" ]; then
+            cat << EOF >> release_notes.md
           - **SUSFS Hide Features**:
             - ✅ SUS_PATH - Hide suspicious paths
             - ✅ SUS_MOUNT - Hide mount points (No Cli Support)
@@ -884,6 +942,9 @@ jobs:
             - ✅ OPEN_REDIRECT - File access redirection
             - ✅ SUS_MAP - Memory mapping protection
             - ✅ AVC_SPOOF - Spoof Procfs avc denial logs
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           - **Ptrace Leak Fix** - For kernels < 5.16
           - **Unicode Fix** - Prevent path traversal and other detections using non-printable Unicode codepoints [Experimental]
           
@@ -920,11 +981,15 @@ jobs:
             → [GitHub Release](https://github.com/tiann/KernelSU/releases)
           EOF
           fi
-          cat << EOF >> release_notes.md
+          if [ "$susfs_enabled" = "true" ]; then
+            cat << EOF >> release_notes.md
           
           ### Required Module
           - **KSU SUSFS Module** (Required for SUSFS features)  
             → [GitHub Release](https://github.com/sidex15/ksu_module_susfs/releases)
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           
           ### Recomended Flasher
           - **Kernel Flasher** (Required for flashing AnyKernel3 zips and backups and OTA)  
@@ -949,17 +1014,29 @@ jobs:
             d. If root access is from Apatch(any forks): Delete all files from /data/adb. This is to start fresh and reduce multiple root implementation detected by modules.
           4. Reboot system.
           5. Install $root_manager_name.
+          EOF
+          if [ "$susfs_enabled" = "true" ]; then
+            cat << EOF >> release_notes.md
           6. Install SusFS module from manager.
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           
           ---
           
           ## 📜 Changelog
           
           ### This Release
+          EOF
+          if [ "$susfs_enabled" = "true" ]; then
+            cat << EOF >> release_notes.md
           - Updated SUSFS to $SUSFS_BASE_VERSION.
+          - Enhanced SUSFS hiding capabilities.
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           - Added HMBIRD support for all SM8750/MT6991 devices.
           - Improved ccache build system.
-          - Enhanced SUSFS hiding capabilities.
           - Added IP_SET, IPv6 NAT and TTL support.
           - Added TMPFS_XATTR and TMPFS_POSIX_ACL support for Mountify.
           - Added Ptrace leak fix for kernels < 5.16.
@@ -979,7 +1056,13 @@ jobs:
           
           - **KernelSU Next Team** - Root solution
           - **KernelSU Team** - Root solution
+          EOF
+          if [ "$susfs_enabled" = "true" ]; then
+            cat << EOF >> release_notes.md
           - **simonpunk** - SUSFS development
+          EOF
+          fi
+          cat << EOF >> release_notes.md
           - **OnePlus** - Kernel source code
           - **Community Contributors** - Testing and feedback
           
